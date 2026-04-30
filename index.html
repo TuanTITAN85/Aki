@@ -1,0 +1,3136 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Island Pirates - Hải Tặc Đảo</title>
+<style>
+  /* ===== CSS: căn giữa game và làm nền tối cho dễ chịu mắt ===== */
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #0b1530;
+    overflow: hidden;
+    font-family: "Segoe UI", "Comic Sans MS", sans-serif;
+    color: white;
+  }
+  #wrap {
+    width: 100%; height: 100%;
+    display: flex; justify-content: center; align-items: center;
+  }
+  canvas {
+    background: #87ceeb;
+    image-rendering: pixelated;       /* Giữ nét pixel art */
+    image-rendering: crisp-edges;
+    box-shadow: 0 0 30px rgba(0,0,0,0.6);
+    border-radius: 6px;
+    cursor: crosshair;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="1280" height="720"></canvas>
+</div>
+
+<script>
+"use strict";
+
+// ===========================================================================
+// ISLAND PIRATES - Game đi cảnh (Platformer) cho học sinh tiểu học
+// Tác giả thiết kế: Lâm, 10 tuổi
+// Chú thích: tất cả comment đều bằng tiếng Việt cho dễ đọc
+// ===========================================================================
+
+// --- Lấy canvas và vẽ ---
+const canvas = document.getElementById("game");
+const ctx    = canvas.getContext("2d");
+ctx.imageSmoothingEnabled = false; // giữ nét pixel
+
+// Kích thước màn hình game
+const W = canvas.width;
+const H = canvas.height;
+
+// --- Hằng số vật lý ---
+const GRAVITY     = 0.55;    // trọng lực kéo nhân vật xuống
+const JUMP_POWER  = 13.5;    // lực nhảy
+const MOVE_SPEED  = 4.2;     // tốc độ chạy
+const FRICTION    = 0.82;    // ma sát mặt đất
+const AIR_DRAG    = 0.96;    // cản không khí
+
+// ===========================================================================
+// 1) TIỆN ÍCH (Utility) ----------------------------------------------------
+// ===========================================================================
+const rand   = (a, b) => a + Math.random() * (b - a);
+const randi  = (a, b) => Math.floor(rand(a, b + 1));
+const choice = arr => arr[randi(0, arr.length - 1)];
+const clamp  = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// Kiểm tra hai hình chữ nhật có chạm nhau không (AABB)
+function rectsHit(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x &&
+         a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+// Vẽ chữ có viền (cho dễ đọc trên nền)
+function drawText(text, x, y, size = 18, color = "#fff", outline = "#000", align = "left") {
+  ctx.font = `bold ${size}px "Segoe UI", sans-serif`;
+  ctx.textAlign = align;
+  ctx.textBaseline = "top";
+  ctx.lineWidth = Math.max(2, size / 8);
+  ctx.strokeStyle = outline;
+  ctx.strokeText(text, x, y);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+}
+
+// ===========================================================================
+// 1.5) HỆ THỐNG ÂM THANH (Web Audio API - không dùng file ngoài) -----------
+//      Tất cả tiếng đều được tạo từ oscillator để khỏi cần tải file
+// ===========================================================================
+let audioCtx = null;
+function ensureAudio() {
+  // Trình duyệt yêu cầu phải có hành động người dùng (click/phím) trước khi tạo
+  if (!audioCtx) {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) { audioCtx = null; }
+  }
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+}
+
+// Phát một tone đơn giản với envelope tắt dần
+function playTone(freq, dur, opts = {}) {
+  if (!audioCtx) return;
+  const t0 = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = opts.type || "square";
+  o.frequency.setValueAtTime(freq, t0);
+  if (opts.endFreq != null) {
+    o.frequency.exponentialRampToValueAtTime(Math.max(1, opts.endFreq), t0 + dur);
+  }
+  const vol = opts.vol == null ? 0.1 : opts.vol;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t0);
+  o.stop(t0 + dur + 0.05);
+}
+
+// Các hiệu ứng âm thanh trong game
+function sfxJump()   { playTone(380, 0.12, { type: "square",   endFreq: 720, vol: 0.07 }); }
+function sfxShoot()  { playTone(660, 0.08, { type: "square",   endFreq: 990, vol: 0.05 }); }
+function sfxHitEnemy(){ playTone(680, 0.06, { type: "square",   endFreq: 320, vol: 0.07 }); }
+function sfxKillEnemy() {
+  playTone(440, 0.10, { type: "square",   endFreq: 200, vol: 0.09 });
+  setTimeout(() => playTone(220, 0.18, { type: "sawtooth", endFreq: 70, vol: 0.09 }), 80);
+}
+function sfxHurt()   { playTone(220, 0.25, { type: "sawtooth", endFreq: 80,  vol: 0.13 }); }
+function sfxCoin() {
+  playTone(880, 0.06, { type: "sine", vol: 0.10 });
+  setTimeout(() => playTone(1320, 0.10, { type: "sine", vol: 0.10 }), 60);
+}
+function sfxFruit() {
+  // Cung 4 nốt đi lên - báo "vừa được sức mạnh mới"
+  const notes = [523, 659, 784, 1046];
+  notes.forEach((f, i) => setTimeout(() =>
+    playTone(f, 0.16, { type: "triangle", vol: 0.13 }), i * 90));
+}
+function sfxSplash() {
+  // Tiếng nước văng + rơi sâu
+  playTone(180, 0.4, { type: "sawtooth", endFreq: 60, vol: 0.16 });
+  setTimeout(() => playTone(120, 0.30, { type: "sine", endFreq: 50, vol: 0.10 }), 100);
+}
+function sfxBossShoot(){ playTone(180, 0.18, { type: "sawtooth", endFreq: 90, vol: 0.10 }); }
+function sfxWin() {
+  const notes = [523, 659, 784, 1046, 1318];
+  notes.forEach((f, i) => setTimeout(() =>
+    playTone(f, 0.22, { type: "triangle", vol: 0.14 }), i * 130));
+}
+function sfxGameOver() {
+  const notes = [440, 392, 349, 261];
+  notes.forEach((f, i) => setTimeout(() =>
+    playTone(f, 0.32, { type: "sawtooth", vol: 0.13 }), i * 200));
+}
+
+// Nhạc nền: melody pirate kiểu La thứ, lặp vô tận khi đang chơi
+const BGM_NOTES = [
+  // Câu nhạc 1
+  440, 523, 659, 880,  784, 659, 523, 659,
+  // Câu nhạc 2
+  698, 587, 494, 587,  523, 659, 440, 659
+];
+const BGM_BASS = [
+  110, 110, 110, 110, 110, 110, 110, 110,
+  87,  87,  87,  87,  73,  73,  110, 110
+];
+let bgmInterval = null;
+let bgmStep = 0;
+function startBGM() {
+  if (!audioCtx || bgmInterval) return;
+  bgmStep = 0;
+  bgmInterval = setInterval(() => {
+    const m = BGM_NOTES[bgmStep % BGM_NOTES.length];
+    const b = BGM_BASS[bgmStep % BGM_BASS.length];
+    playTone(m, 0.30, { type: "triangle", vol: 0.04 });
+    if (bgmStep % 2 === 0) playTone(b, 0.45, { type: "sine", vol: 0.05 });
+    bgmStep++;
+  }, 320);
+}
+function stopBGM() {
+  if (bgmInterval) { clearInterval(bgmInterval); bgmInterval = null; }
+}
+
+// ===========================================================================
+// 2) HỆ THỐNG HẠT (Particle System) ----------------------------------------
+//    Dùng để tạo bụi khi nhảy, sao khi nhặt vật phẩm, vụ nổ khi đánh trúng
+// ===========================================================================
+const particles = [];
+function spawnParticles(x, y, opts = {}) {
+  // opts: count, color, speed, size, life, gravity, spread
+  const count = opts.count || 12;
+  for (let i = 0; i < count; i++) {
+    const ang = rand(0, Math.PI * 2);
+    const sp  = rand((opts.speed || 3) * 0.3, opts.speed || 3);
+    particles.push({
+      x, y,
+      vx: Math.cos(ang) * sp,
+      vy: Math.sin(ang) * sp - (opts.upward || 0),
+      life: opts.life || 35,
+      maxLife: opts.life || 35,
+      size: opts.size || 3,
+      color: opts.color || "#ffd54a",
+      gravity: opts.gravity == null ? 0.18 : opts.gravity,
+      shape: opts.shape || "square"   // "square" | "star"
+    });
+  }
+}
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += p.gravity;
+    p.vx *= 0.98;
+    p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+function drawParticles(camX, camY) {
+  for (const p of particles) {
+    const alpha = p.life / p.maxLife;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    if (p.shape === "star") {
+      // ngôi sao 4 cánh đơn giản
+      const s = p.size * (0.5 + alpha);
+      ctx.fillRect(p.x - camX - s, p.y - camY - 1, s * 2, 2);
+      ctx.fillRect(p.x - camX - 1, p.y - camY - s, 2, s * 2);
+    } else {
+      const s = p.size * (0.5 + alpha);
+      ctx.fillRect(p.x - camX - s/2, p.y - camY - s/2, s, s);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ===========================================================================
+// 3) HÀM VẼ PIXEL ART ------------------------------------------------------
+//    Vẽ nhân vật / kẻ thù bằng cách xếp các ô vuông nhỏ
+// ===========================================================================
+// Vẽ 1 sprite từ ma trận chữ -> mỗi chữ ứng với 1 màu
+function drawPixelSprite(grid, palette, dx, dy, pixel = 3, flip = false) {
+  for (let row = 0; row < grid.length; row++) {
+    const line = grid[row];
+    for (let col = 0; col < line.length; col++) {
+      const ch = line[col];
+      if (ch === "." || ch === " ") continue;
+      const color = palette[ch];
+      if (!color) continue;
+      const cx = flip ? (line.length - 1 - col) : col;
+      ctx.fillStyle = color;
+      ctx.fillRect(dx + cx * pixel, dy + row * pixel, pixel, pixel);
+    }
+  }
+}
+
+// ----- Sprite của Hải tặc (nhân vật chính) -----
+// Bảng màu: K=đen, S=da, R=đỏ (mũ), W=trắng, B=xanh áo, Y=vàng, P=tím (mắt), G=xám (kiếm), O=cam
+const PIRATE_PALETTE = {
+  K: "#1b1f2a",
+  S: "#ffd6a8",
+  R: "#d33b3b",
+  W: "#ffffff",
+  B: "#2b6dff",
+  Y: "#f5c542",
+  P: "#3a2a5e",
+  G: "#cfd6e0",
+  O: "#ff8a3c",
+  X: "#000000"
+};
+
+// Mỗi pose là 1 ma trận - kích thước ~12x16
+const PIRATE_IDLE_1 = [
+  "....RRRRRR..",
+  "...RWRRRRRR.",
+  "....RRRRRR..",
+  "....SSSSSS..",
+  "...SSKSKSS..",   // mặt + mắt
+  "...SSSSSSS..",
+  "....KSSSK...",   // miệng cười
+  "...BBBBBBB..",
+  "..BBBYBBBB..",   // áo có nút vàng
+  "..BBBYBBBBG.",   // tay phải cầm chuôi kiếm (G)
+  "..BBBBBBBBG.",
+  "...KKKKKK.G.",
+  "...KK..KK.G.",
+  "...KK..KK...",
+  "..KKK..KKK..",
+  "..KKK..KKK.."
+];
+const PIRATE_IDLE_2 = [
+  "....RRRRRR..",
+  "...RWRRRRRR.",
+  "....RRRRRR..",
+  "....SSSSSS..",
+  "...SSKSKSS..",
+  "...SSSSSSS..",
+  "....KSSSK...",
+  "...BBBBBBB..",
+  "...BBBYBBB..",
+  "..BBBYBBBBG.",
+  "..BBBBBBBBG.",
+  "...KKKKKK.G.",
+  "...KK..KK.G.",
+  "...KK..KK...",
+  "..KKK..KKK..",
+  "..KKK..KKK.."
+];
+const PIRATE_RUN_1 = [
+  "....RRRRRR..",
+  "...RWRRRRRR.",
+  "....RRRRRR..",
+  "....SSSSSS..",
+  "...SSKSKSS..",
+  "...SSSSSSS..",
+  "....KSSSK...",
+  "...BBBBBBB..",
+  "..BBBBYBBB.G",
+  "..BBBBYBBBBG",
+  "...BBBBBBB.G",
+  "...KKKKKK...",
+  "..KK....KK..",
+  ".KK......KK.",
+  ".KK......KK.",
+  "KKK.......KK"
+];
+const PIRATE_RUN_2 = [
+  "....RRRRRR..",
+  "...RWRRRRRR.",
+  "....RRRRRR..",
+  "....SSSSSS..",
+  "...SSKSKSS..",
+  "...SSSSSSS..",
+  "....KSSSK...",
+  "..BBBBBBB...",
+  "GBBBBBYBBB..",
+  "GBBBBBYBBBB.",
+  "GBBBBBBBB...",
+  "...KKKKKK...",
+  "...KK..KKK..",
+  "..KK....KKK.",
+  "..KK......KK",
+  "..KKK......K"
+];
+const PIRATE_JUMP = [
+  "....RRRRRR..",
+  "...RWRRRRRR.",
+  "....RRRRRR..",
+  "....SSSSSS..",
+  "...SSKSKSS..",
+  "...SSSSSSS..",
+  "....KSSSK...",
+  "...BBBBBBB..",
+  "GGBBBYBBBBGG",
+  ".GBBBYBBBBG.",
+  "..BBBBBBBB..",
+  "...KKKKKK...",
+  "...KK..KK...",
+  "..KK....KK..",
+  "..KK....KK..",
+  "............"
+];
+
+// ===========================================================================
+// 3.5) BẢNG SỨC MẠNH - thay đổi khi ăn trái ác quỷ -------------------------
+// ===========================================================================
+const POWERS = {
+  default: {
+    name: "Phép Cơ Bản",
+    color: "#a26bff", glow: "#cba9ff",
+    dmg: 25, cd: 18, speed: 9, size: 14,
+    count: 1, spread: 0
+  },
+  dragon: {  // Trái Rồng - chậm nhưng cực mạnh
+    name: "Trái Rồng",
+    color: "#ff4a4a", glow: "#ffb8b8",
+    dmg: 60, cd: 28, speed: 9, size: 22,
+    count: 1, spread: 0
+  },
+  flame: {   // Trái Lửa - nhanh, vừa
+    name: "Trái Lửa",
+    color: "#ff8a3c", glow: "#ffd4a8",
+    dmg: 32, cd: 12, speed: 11, size: 16,
+    count: 1, spread: 0
+  },
+  ice: {     // Trái Băng - bắn ra 2 viên
+    name: "Trái Băng",
+    color: "#9ee0ff", glow: "#dff4ff",
+    dmg: 22, cd: 14, speed: 10, size: 14,
+    count: 2, spread: 0.18
+  },
+  thunder: { // Trái Sét - cực mạnh, hơi chậm bắn
+    name: "Trái Sét",
+    color: "#fff14a", glow: "#ffffb0",
+    dmg: 85, cd: 40, speed: 14, size: 20,
+    count: 1, spread: 0
+  },
+  wind: {    // Trái Gió - 3 đạn quạt, rất nhanh
+    name: "Trái Gió",
+    color: "#aaffd0", glow: "#dfffe8",
+    dmg: 16, cd: 8, speed: 12, size: 12,
+    count: 3, spread: 0.22
+  }
+};
+const FRUIT_VI_NAMES = {
+  dragon: "Trái Rồng", flame: "Trái Lửa", ice: "Trái Băng",
+  thunder: "Trái Sét", wind: "Trái Gió"
+};
+// Thứ tự cố định cho thanh sức mạnh (phím 1..6)
+const POWER_ORDER = ["default", "dragon", "flame", "ice", "thunder", "wind"];
+
+// ===========================================================================
+// 4) LỚP NHÂN VẬT CHÍNH (Player) -------------------------------------------
+// ===========================================================================
+class Player {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.w = 36; this.h = 48;        // kích thước hộp va chạm
+    this.vx = 0; this.vy = 0;
+    this.onGround = false;
+    this.facing = 1;                 // 1 = nhìn phải, -1 = nhìn trái
+    this.animTime = 0;
+    this.state = "idle";             // idle | run | jump
+    this.maxHp = 100; this.hp = 100;
+    this.lives = 3;
+    this.score = 0;
+    this.gold = 0;
+    this.invul = 0;                  // bất tử tạm thời sau khi bị đánh
+    this.attackCooldown = 0;
+    this.dead = false;
+    this.power = "default";          // sức mạnh đang dùng
+    this.inventory = ["default"];    // danh sách sức mạnh đã sở hữu
+    this.swordTier = 0;              // cấp kiếm: 0=chưa có, 1=Đồng, 2=Bạc, 3=Vàng
+    this.name = "Hải Tặc";           // tên người chơi (nhập ở màn hình đầu)
+  }
+
+  // Hệ số sát thương theo cấp kiếm
+  swordMultiplier() {
+    return [1.0, 1.2, 1.5, 2.0][this.swordTier] || 1.0;
+  }
+
+  // Thêm trái ác quỷ vào kho. Nếu chưa có thì thêm và chuyển sang dùng luôn
+  acquireFruit(fruit) {
+    if (!this.inventory.includes(fruit)) {
+      this.inventory.push(fruit);
+    }
+    this.power = fruit;
+  }
+
+  update(input, level) {
+    if (this.dead) return;
+
+    // Di chuyển trái phải
+    let moving = false;
+    if (input.left)  { this.vx -= 0.7; this.facing = -1; moving = true; }
+    if (input.right) { this.vx += 0.7; this.facing =  1; moving = true; }
+    this.vx = clamp(this.vx, -MOVE_SPEED, MOVE_SPEED);
+
+    // Nhảy bằng phím cách hoặc mũi tên lên
+    if ((input.jump || input.up) && this.onGround) {
+      this.vy = -JUMP_POWER;
+      this.onGround = false;
+      sfxJump();
+      // hiệu ứng bụi khi nhảy
+      spawnParticles(this.x + this.w/2, this.y + this.h, {
+        count: 10, color: "#fff7d6", speed: 3, size: 3, life: 25, upward: 1, gravity: 0.1
+      });
+    }
+
+    // Trọng lực
+    this.vy += GRAVITY;
+    if (this.vy > 18) this.vy = 18;
+
+    // Áp dụng vận tốc + xử lý va chạm với nền
+    this.x += this.vx;
+    this._collide(level, "x");
+    this.onGround = false;            // sẽ được bật lại nếu chạm đỉnh platform
+    this.y += this.vy;
+    this._collide(level, "y");
+
+    // Ma sát
+    if (this.onGround) this.vx *= FRICTION;
+    else this.vx *= AIR_DRAG;
+    if (Math.abs(this.vx) < 0.05) this.vx = 0;
+
+    // Cập nhật trạng thái animation
+    if (!this.onGround) this.state = "jump";
+    else if (Math.abs(this.vx) > 0.5) this.state = "run";
+    else this.state = "idle";
+    this.animTime += 1;
+
+    if (this.invul > 0) this.invul--;
+    if (this.attackCooldown > 0) this.attackCooldown--;
+
+    // Rơi xuống biển = mất 1 mạng ngay (không nương tay)
+    if (this.y > level.deathY) {
+      this.fallIntoSea(level);
+    }
+  }
+
+  // Mất 1 mạng do rơi xuống biển
+  fallIntoSea(level) {
+    sfxSplash();
+    // Hiệu ứng nước bắn lên
+    spawnParticles(this.x + this.w/2, level.deathY - 20, {
+      count: 30, color: "#9be0ff", speed: 6, size: 4, life: 40, gravity: 0.25
+    });
+    this.lives--;
+    if (this.lives <= 0) {
+      this.dead = true;
+      this.hp = 0;
+      return;
+    }
+    this.hp = this.maxHp;
+    this.respawn(level);
+  }
+
+  _collide(level, axis) {
+    // Va chạm với danh sách platform
+    for (const p of level.platforms) {
+      if (rectsHit(this, p)) {
+        if (axis === "x") {
+          if (this.vx > 0) this.x = p.x - this.w;
+          else if (this.vx < 0) this.x = p.x + p.w;
+          this.vx = 0;
+        } else {
+          if (this.vy > 0) {
+            this.y = p.y - this.h;
+            this.vy = 0;
+            this.onGround = true;
+          } else if (this.vy < 0) {
+            this.y = p.y + p.h;
+            this.vy = 0;
+          }
+        }
+      }
+    }
+    if (axis === "y" && this.vy !== 0) {
+      // chỉ giữ trạng thái onGround khi vừa chạm đỉnh platform
+    }
+  }
+
+  respawn(level) {
+    this.x = level.spawnX;
+    this.y = level.spawnY;
+    this.vx = 0; this.vy = 0;
+    this.invul = 90;
+  }
+
+  takeDamage(dmg) {
+    if (this.invul > 0 || this.dead) return;
+    this.hp -= dmg;
+    this.invul = 60;
+    sfxHurt();
+    spawnParticles(this.x + this.w/2, this.y + this.h/2, {
+      count: 12, color: "#ff4040", speed: 4, size: 3, life: 30
+    });
+    if (this.hp <= 0) {
+      this.lives--;
+      if (this.lives <= 0) {
+        this.dead = true;
+        this.hp = 0;
+      } else {
+        this.hp = this.maxHp;
+      }
+    }
+  }
+
+  draw(camX, camY) {
+    // Nhấp nháy khi đang bất tử
+    if (this.invul > 0 && Math.floor(this.invul / 4) % 2 === 0) return;
+
+    let grid;
+    if (this.state === "jump") grid = PIRATE_JUMP;
+    else if (this.state === "run") {
+      grid = (Math.floor(this.animTime / 6) % 2 === 0) ? PIRATE_RUN_1 : PIRATE_RUN_2;
+    } else {
+      // idle: hơi nhún nhẹ
+      grid = (Math.floor(this.animTime / 30) % 2 === 0) ? PIRATE_IDLE_1 : PIRATE_IDLE_2;
+    }
+    const flip = (this.facing === -1);
+    drawPixelSprite(grid, PIRATE_PALETTE, this.x - camX, this.y - camY, 3, flip);
+  }
+}
+
+// ===========================================================================
+// 5) ĐẠN PHÉP THUẬT - "Khống Chế Từ Xa" ------------------------------------
+// ===========================================================================
+class MagicOrb {
+  constructor(x, y, dirX, dirY, owner = "player", cfg = null) {
+    // Cho phép truyền VECTOR hướng (đã chuẩn hóa hoặc không) thay vì tọa độ đích.
+    // Nếu cfg null thì dùng cấu hình mặc định / cấu hình của boss
+    this.x = x; this.y = y;
+    this.cfg = cfg || (owner === "player" ? POWERS.default : {
+      color: "#ff5050", glow: "#ffb0b0",
+      dmg: 14, speed: 7, size: 16, cd: 0, name: "Boss"
+    });
+    this.size = this.cfg.size || 14;
+    this.w = this.size; this.h = this.size;
+    const d = Math.hypot(dirX, dirY) || 1;
+    const sp = this.cfg.speed || 9;
+    this.vx = (dirX / d) * sp;
+    this.vy = (dirY / d) * sp;
+    this.life = 80;
+    this.owner = owner;
+    this.dmg = this.cfg.dmg;
+    this.gravity = this.cfg.gravity || 0;     // dùng cho đạn parabol (chuối, v.v.)
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += this.gravity;
+    this.life--;
+    // Vệt sáng phía sau
+    spawnParticles(this.x + this.size/2, this.y + this.size/2, {
+      count: 1, color: this.cfg.color, speed: 0.4, size: 3, life: 18, gravity: 0
+    });
+  }
+  draw(camX, camY) {
+    const cx = this.x - camX + this.size/2, cy = this.y - camY + this.size/2;
+    // hào quang ngoài
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = this.cfg.glow;
+    ctx.beginPath(); ctx.arc(cx, cy, this.size * 0.9, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = this.cfg.color;
+    ctx.beginPath(); ctx.arc(cx, cy, this.size * 0.45, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(cx, cy, this.size * 0.18, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+// ===========================================================================
+// 6) KẺ THÙ ----------------------------------------------------------------
+// ===========================================================================
+// Sprite lính canh - mặc đồng phục đen-đỏ
+const GUARD_PALETTE = {
+  K: "#1a1a1a", S: "#ffd6a8", R: "#a51212", W: "#fff",
+  Y: "#f5c542", G: "#666", X: "#000"
+};
+const GUARD_BODY_1 = [
+  "...KKKKKK...",
+  "..KKKRRKKK..",
+  "..KSSSSSSK..",
+  "..SSKSKSSS..",
+  "..SSSSSSSS..",
+  "...SKKK SS..",
+  "..RRRRRRRR..",
+  "..RRYRYRRR..",
+  ".KRRRRRRRRK.",
+  ".KRRRRRRRRK.",
+  "..KKKKKKKK..",
+  "...KK..KK...",
+  "...KK..KK...",
+  "..KKK..KKK..",
+  "..KKK..KKK..",
+  "..KKK..KKK.."
+];
+const GUARD_BODY_2 = [
+  "...KKKKKK...",
+  "..KKKRRKKK..",
+  "..KSSSSSSK..",
+  "..SSKSKSSS..",
+  "..SSSSSSSS..",
+  "...SKKK SS..",
+  "..RRRRRRRR..",
+  "..RRYRYRRR..",
+  ".KRRRRRRRRK.",
+  "..KRRRRRRK..",
+  "..KKKKKKKK..",
+  "...KK..KK...",
+  "..KK....KK..",
+  "..KK....KK..",
+  ".KK......KK.",
+  ".KK......KK."
+];
+
+// Sprite thú rừng - dùng chung khung, đổi bảng màu để có rắn / hổ / heo / sói / khỉ
+function makeBeastPalette(theme) {
+  switch (theme) {
+    case "tiger":  return { B: "#ff9b1c", D: "#7a3a00", W: "#fff", K: "#0a0a0a", P: "#ffd9b3" };
+    case "snake":  return { B: "#3ec46a", D: "#1f7a3a", W: "#fff", K: "#0a0a0a", P: "#9ff0b8" };
+    case "boar":   return { B: "#7a3a00", D: "#3a1a00", W: "#fff", K: "#0a0a0a", P: "#a86a40" };
+    case "wolf":   return { B: "#7a8395", D: "#3a4252", W: "#fff", K: "#0a0a0a", P: "#cfd6e0" };
+    case "bear":   return { B: "#5b3a1a", D: "#2a1a06", W: "#fff", K: "#0a0a0a", P: "#a47550" };
+    case "monkey": return { B: "#a0691a", D: "#5a3a06", W: "#fff", K: "#0a0a0a", P: "#ffd6a8" };
+    case "spider": return { B: "#3a2a5e", D: "#1a0e2a", W: "#fff", K: "#0a0a0a", P: "#a26bff" };
+    case "yeti":   return { B: "#e6f0ff", D: "#a8c0e0", W: "#fff", K: "#0a0a0a", P: "#ffd6a8" };
+  }
+  return { B: "#888", D: "#444", W: "#fff", K: "#000", P: "#aaa" };
+}
+const BEAST_BODY_1 = [
+  "..............",
+  "..BBB....BB...",
+  ".BPBBB..BBPB..",   // tai
+  ".BBBBBBBBBBB..",
+  ".BDBBKBBKBBD..",   // mắt
+  ".BBBBBBBBBBB..",
+  ".BBBPPPPPPBB..",   // mõm
+  ".BDBBKKKKBBD..",
+  ".BBBBBBBBBBB..",
+  "..BBBBBBBBB...",
+  "..BB.BB.BB....",
+  "..BB.BB.BB....",
+  "..KK.KK.KK....",
+  "..............",
+  "..............",
+  ".............."
+];
+const BEAST_BODY_2 = [
+  "..............",
+  "..BBB....BB...",
+  ".BPBBB..BBPB..",
+  ".BBBBBBBBBBB..",
+  ".BDBBKBBKBBD..",
+  ".BBBBBBBBBBB..",
+  ".BBBPPPPPPBB..",
+  ".BDBBKKKKBBD..",
+  ".BBBBBBBBBBB..",
+  "..BBBBBBBBB...",
+  "...BB.BB.BB...",
+  "...BB.BB.BB...",
+  "...KK.KK.KK...",
+  "..............",
+  "..............",
+  ".............."
+];
+
+// Lớp cha cho mọi kẻ thù
+class Enemy {
+  constructor(x, y, opts = {}) {
+    this.x = x; this.y = y;
+    this.w = opts.w || 36; this.h = opts.h || 48;
+    this.vx = 0; this.vy = 0;
+    this.hp = opts.hp || 30;
+    this.maxHp = this.hp;
+    this.dmg = opts.dmg || 10;
+    this.kind = opts.kind || "guard";  // guard | beast | boss
+    this.theme = opts.theme || null;
+    this.facing = -1;
+    this.animTime = 0;
+    this.patrolL = x - 120;
+    this.patrolR = x + 120;
+    this.alive = true;
+    this.onGround = false;
+    this.hitFlash = 0;
+    this.aggro = false;
+    this.attackCD = 0;
+    this.scoreReward = opts.scoreReward || 50;
+    this.goldReward  = opts.goldReward  || 5;
+    this.boss = !!opts.boss;
+    this.bossName = opts.bossName || "";
+    this.bossKind = opts.bossKind || null;     // mỗi đảo 1 loại boss khác nhau
+    this.shootCD = 0;
+    this.rewarded = false;            // đã được tính điểm/quest chưa
+  }
+
+  // Kiểm tra có nền bên dưới điểm (x, y) không (dùng để khỏi đi rơi mép)
+  _hasGroundBelow(level, x, y) {
+    for (const p of level.platforms) {
+      if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h + 6) return true;
+    }
+    return false;
+  }
+
+  update(level, player) {
+    if (!this.alive) return;
+
+    const dx = (player.x + player.w/2) - (this.x + this.w/2);
+    const dy = (player.y + player.h/2) - (this.y + this.h/2);
+    const dist = Math.hypot(dx, dy);
+
+    // Tìm thấy người chơi -> đuổi (phạm vi xa hơn)
+    if (dist < (this.boss ? 800 : 460)) this.aggro = true;
+
+    let speed = this.boss ? 3.4 : (this.kind === "beast" ? 3.6 : 2.6);
+
+    if (this.aggro) {
+      this.vx = Math.sign(dx) * speed;
+      this.facing = Math.sign(dx) || this.facing;
+      // Nhảy nếu thấy người chơi cao hơn (boss/quái nhảy thường xuyên hơn)
+      const jumpChance = this.boss ? 0.08 : 0.07;
+      if (this.onGround && dy < -20 && Math.random() < jumpChance) this.vy = -12;
+      // Boss dùng kỹ năng riêng theo loại
+      if (this.boss) {
+        this.shootCD--;
+        if (this.shootCD <= 0 && dist < 700) {
+          const bk = BOSS_KINDS[this.bossKind];
+          if (bk && bk.skill) {
+            bk.skill(this, player);
+            this.shootCD = bk.cooldown || 60;
+          } else {
+            // dự phòng: 3 đạn quạt cũ
+            const dxA = (player.x + player.w/2) - (this.x + this.w/2);
+            const dyA = (player.y + player.h/2) - (this.y + this.h/2);
+            const baseAng = Math.atan2(dyA, dxA);
+            for (let k = -1; k <= 1; k++) {
+              const a = baseAng + k * 0.22;
+              enemyOrbs.push(new MagicOrb(
+                this.x + this.w/2 - 9, this.y + this.h/2 - 9,
+                Math.cos(a), Math.sin(a), "enemy",
+                { color: "#ff5050", glow: "#ffb0b0", dmg: this.dmg, speed: 7.5, size: 18 }
+              ));
+            }
+            this.shootCD = 55;
+          }
+          sfxBossShoot();
+        }
+      }
+    } else {
+      // Tuần tra
+      this.vx = speed * 0.5 * this.facing;
+      if (this.x < this.patrolL) this.facing = 1;
+      if (this.x > this.patrolR) this.facing = -1;
+      // Đứng trên đất mà tới mép thì quay đầu để khỏi đi rơi xuống biển
+      if (this.onGround) {
+        const checkX = this.facing > 0 ? this.x + this.w + 4 : this.x - 4;
+        const checkY = this.y + this.h + 4;
+        if (!this._hasGroundBelow(level, checkX, checkY)) {
+          this.facing *= -1;
+          this.vx = speed * 0.5 * this.facing;
+        }
+      }
+    }
+
+    // Trọng lực
+    this.vy += GRAVITY;
+    if (this.vy > 18) this.vy = 18;
+
+    // Va chạm
+    this.x += this.vx;
+    this._collide(level, "x");
+    this.onGround = false;
+    this.y += this.vy;
+    this._collide(level, "y");
+
+    // Đánh người chơi nếu chạm
+    if (rectsHit(this, player) && this.attackCD <= 0) {
+      player.takeDamage(this.dmg);
+      this.attackCD = 40;
+      // đẩy lùi
+      player.vx = Math.sign(dx || 1) * 6;
+      player.vy = -7;
+    }
+    if (this.attackCD > 0) this.attackCD--;
+    if (this.hitFlash > 0) this.hitFlash--;
+    this.animTime++;
+
+    // Rơi xuống biển = chết luôn (để nhiệm vụ vẫn hoàn thành được)
+    if (this.alive && this.y > level.deathY) {
+      this.alive = false;
+      spawnParticles(this.x + this.w/2, level.deathY - 20, {
+        count: 18, color: "#9be0ff", speed: 5, size: 4, life: 30
+      });
+    }
+  }
+
+  _collide(level, axis) {
+    for (const p of level.platforms) {
+      if (rectsHit(this, p)) {
+        if (axis === "x") {
+          if (this.vx > 0) this.x = p.x - this.w;
+          else if (this.vx < 0) this.x = p.x + p.w;
+          this.vx = 0;
+          this.facing *= -1;
+        } else {
+          if (this.vy > 0) {
+            this.y = p.y - this.h;
+            this.vy = 0;
+            this.onGround = true;
+          } else if (this.vy < 0) {
+            this.y = p.y + p.h;
+            this.vy = 0;
+          }
+        }
+      }
+    }
+  }
+
+  takeDamage(dmg) {
+    this.hp -= dmg;
+    this.hitFlash = 8;
+    spawnParticles(this.x + this.w/2, this.y + this.h/2, {
+      count: 14, color: "#ffea60", speed: 4, size: 3, life: 28
+    });
+    if (this.hp <= 0) {
+      this.alive = false;
+      spawnParticles(this.x + this.w/2, this.y + this.h/2, {
+        count: 28, color: "#ff7a3c", speed: 6, size: 4, life: 40
+      });
+    }
+  }
+
+  draw(camX, camY) {
+    if (!this.alive) return;
+    const flash = this.hitFlash > 0;
+    if (flash) {
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(this.x - camX - 2, this.y - camY - 2, this.w + 4, this.h + 4);
+      ctx.globalAlpha = 1;
+    }
+
+    if (this.kind === "guard") {
+      const grid = (Math.floor(this.animTime / 8) % 2 === 0) ? GUARD_BODY_1 : GUARD_BODY_2;
+      const flip = this.facing === -1;
+      drawPixelSprite(grid, GUARD_PALETTE, this.x - camX, this.y - camY, 3, flip);
+    } else if (this.kind === "beast") {
+      const grid = (Math.floor(this.animTime / 8) % 2 === 0) ? BEAST_BODY_1 : BEAST_BODY_2;
+      const pal = makeBeastPalette(this.theme);
+      const flip = this.facing === -1;
+      const px = (this.theme === "yeti" || this.boss) ? 4 : 3;
+      drawPixelSprite(grid, pal, this.x - camX, this.y - camY, px, flip);
+    } else if (this.kind === "boss") {
+      const bk = BOSS_KINDS[this.bossKind];
+      if (bk && bk.draw) {
+        bk.draw(this, camX, camY);
+      } else {
+        // dự phòng (không nên xảy ra nếu cấu hình đúng)
+        const grid = (Math.floor(this.animTime / 8) % 2 === 0) ? GUARD_BODY_1 : GUARD_BODY_2;
+        const pal = { ...GUARD_PALETTE, R: "#7a1a1a", K: "#0a0a0a", Y: "#ffd24a" };
+        drawPixelSprite(grid, pal, this.x - camX, this.y - camY, 5, this.facing === -1);
+      }
+    }
+
+    // Thanh máu
+    if (this.boss) {
+      // sẽ vẽ ở UI
+    } else {
+      const ratio = clamp(this.hp / this.maxHp, 0, 1);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(this.x - camX, this.y - camY - 8, this.w, 4);
+      ctx.fillStyle = "#ff4040";
+      ctx.fillRect(this.x - camX, this.y - camY - 8, this.w * ratio, 4);
+    }
+  }
+}
+
+// ===========================================================================
+// 7) VẬT PHẨM (Trái cây + Tiền vàng) ---------------------------------------
+// ===========================================================================
+class Item {
+  constructor(x, y, kind) {
+    this.x = x; this.y = y; this.w = 24; this.h = 24;
+    this.kind = kind;          // "coin" | "fruit"
+    this.bob = Math.random() * Math.PI * 2;
+    this.alive = true;
+    if (kind === "fruit") {
+      // chọn loại trái ngẫu nhiên
+      this.fruit = choice(["dragon", "flame", "ice", "thunder", "wind"]);
+      this.w = 28; this.h = 28;
+    }
+  }
+  update(player) {
+    if (!this.alive) return;
+    this.bob += 0.08;
+    if (rectsHit(this, player)) {
+      this.alive = false;
+      if (this.kind === "coin") {
+        player.gold += 10;
+        player.score += 20;
+        sfxCoin();
+        spawnParticles(this.x + this.w/2, this.y + this.h/2, {
+          count: 18, color: "#ffe04a", speed: 4, size: 3, life: 30, shape: "star"
+        });
+      } else {
+        // Ăn trái ác quỷ -> thêm vào kho (vẫn giữ tất cả trái cũ)
+        const already = player.inventory.includes(this.fruit);
+        player.acquireFruit(this.fruit);
+        player.hp = Math.min(player.maxHp, player.hp + 25);
+        player.score += 200;
+        sfxFruit();
+        const pcolor = (POWERS[this.fruit] && POWERS[this.fruit].color) || "#ff64d4";
+        spawnParticles(this.x + this.w/2, this.y + this.h/2, {
+          count: 36, color: pcolor, speed: 5, size: 4, life: 40, shape: "star"
+        });
+        spawnParticles(player.x + player.w/2, player.y + player.h/2, {
+          count: 24, color: pcolor, speed: 4, size: 3, life: 30
+        });
+        const msg = already
+          ? "Đã ăn lại " + (FRUIT_VI_NAMES[this.fruit] || this.fruit) + "!"
+          : "Sức mạnh mới: " + (FRUIT_VI_NAMES[this.fruit] || this.fruit) +
+            "! Bấm 1-6 để đổi qua lại.";
+        showNotice(msg, 200);
+      }
+    }
+  }
+  draw(camX, camY) {
+    if (!this.alive) return;
+    const yOff = Math.sin(this.bob) * 4;
+    const cx = this.x - camX, cy = this.y - camY + yOff;
+    if (this.kind === "coin") {
+      // tiền vàng tròn
+      ctx.fillStyle = "#fff5a0";
+      ctx.beginPath(); ctx.arc(cx + 12, cy + 12, 12, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#f5c542";
+      ctx.beginPath(); ctx.arc(cx + 12, cy + 12, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#a87a14";
+      ctx.font = "bold 14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("$", cx + 12, cy + 17);
+    } else {
+      // trái ma thuật - màu khác nhau
+      const colors = {
+        dragon:  ["#ff4a4a", "#7a0a0a"],
+        flame:   ["#ff8a3c", "#a51212"],
+        ice:     ["#9ee0ff", "#1c5a8a"],
+        thunder: ["#fff14a", "#a8881a"],
+        wind:    ["#aaffd0", "#1a7a4a"]
+      }[this.fruit];
+      // thân trái cây
+      ctx.fillStyle = colors[1];
+      ctx.beginPath(); ctx.arc(cx + 14, cy + 16, 13, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = colors[0];
+      ctx.beginPath(); ctx.arc(cx + 14, cy + 16, 10, 0, Math.PI * 2); ctx.fill();
+      // điểm sáng
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(cx + 8, cy + 10, 3, 3);
+      // cuống
+      ctx.fillStyle = "#3a8a2a";
+      ctx.fillRect(cx + 12, cy + 2, 4, 6);
+      // lá
+      ctx.fillStyle = "#5ec85a";
+      ctx.fillRect(cx + 16, cy + 4, 6, 3);
+    }
+  }
+}
+
+// ===========================================================================
+// 8) NPC - người giao nhiệm vụ ---------------------------------------------
+// ===========================================================================
+class QuestNPC {
+  constructor(x, y, island) {
+    this.x = x; this.y = y; this.w = 36; this.h = 48;
+    this.island = island;
+    this.bob = 0;
+  }
+  update() { this.bob += 0.06; }
+  inRange(player) {
+    return Math.hypot(
+      (this.x + this.w/2) - (player.x + player.w/2),
+      (this.y + this.h/2) - (player.y + player.h/2)
+    ) < 80;
+  }
+  draw(camX, camY) {
+    const yOff = Math.sin(this.bob) * 2;
+    const palette = {
+      K: "#1a1a1a", S: "#ffd6a8", G: "#3a8a2a", B: "#1a5a8a",
+      Y: "#f5c542", W: "#fff", R: "#d33b3b"
+    };
+    const grid = [
+      "...YYYYYY...",
+      "..YYYYYYYY..",
+      "..YYYYYYYY..",
+      "...SSSSSS...",
+      "..SSKSKSSS..",
+      "..SSSSSSSS..",
+      "...SKKKSS...",
+      "..GGGGGGGG..",
+      "..GGGYGGGG..",
+      "..GGGYGGGG..",
+      "..GGGGGGGG..",
+      "...BBBBBB...",
+      "...BB..BB...",
+      "...BB..BB...",
+      "..KKK..KKK..",
+      "..KKK..KKK.."
+    ];
+    drawPixelSprite(grid, palette, this.x - camX, this.y - camY + yOff, 3);
+
+    // Dấu chấm than nổi trên đầu
+    ctx.fillStyle = "#ffd700";
+    ctx.beginPath();
+    ctx.arc(this.x - camX + 18, this.y - camY - 14 + yOff, 10, 0, Math.PI * 2);
+    ctx.fill();
+    drawText("!", this.x - camX + 18, this.y - camY - 24 + yOff, 22, "#000", "#ffd700", "center");
+  }
+}
+
+// ===========================================================================
+// 9) THUYỀN - chuyển sang đảo tiếp theo ------------------------------------
+// ===========================================================================
+class Boat {
+  constructor(x, y) {
+    this.x = x; this.y = y; this.w = 80; this.h = 40;
+    this.bob = 0;
+  }
+  update() { this.bob += 0.05; }
+  inRange(player) { return rectsHit(this, player); }
+  draw(camX, camY) {
+    const yOff = Math.sin(this.bob) * 3;
+    const cx = this.x - camX, cy = this.y - camY + yOff;
+    // thân thuyền
+    ctx.fillStyle = "#7a3a00";
+    ctx.fillRect(cx, cy + 18, 80, 18);
+    ctx.fillStyle = "#a8631a";
+    ctx.fillRect(cx + 4, cy + 18, 72, 6);
+    // cột buồm
+    ctx.fillStyle = "#3a1a06";
+    ctx.fillRect(cx + 36, cy - 30, 6, 50);
+    // buồm
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(cx + 14, cy - 28, 22, 28);
+    ctx.fillStyle = "#d33b3b";
+    ctx.fillRect(cx + 14, cy - 28, 22, 4);
+    // cờ hải tặc
+    ctx.fillStyle = "#000";
+    ctx.fillRect(cx + 42, cy - 30, 18, 12);
+    drawText("☠", cx + 51, cy - 30, 12, "#fff", "#000", "center");
+  }
+}
+
+// ===========================================================================
+// 9.5) BOSS - mỗi đảo có 1 boss với hình dạng và kỹ năng riêng
+// ===========================================================================
+
+// ----- Hàm vẽ Vua Khỉ Đỏ (Đảo 1) -----
+function drawMonkeyKing(b, camX, camY) {
+  const x = b.x - camX, y = b.y - camY;
+  const w = b.w, h = b.h;
+  const t = b.animTime;
+  const bob = Math.sin(t * 0.1) * 2;
+
+  // chân
+  ctx.fillStyle = "#7a3a06";
+  ctx.fillRect(x + w*0.30, y + h*0.88 + bob, w*0.16, h*0.12);
+  ctx.fillRect(x + w*0.54, y + h*0.88 + bob, w*0.16, h*0.12);
+  // áo choàng đỏ
+  ctx.fillStyle = "#a51212";
+  ctx.fillRect(x + w*0.16, y + h*0.40 + bob, w*0.68, h*0.50);
+  ctx.fillStyle = "#7a0a0a";
+  ctx.fillRect(x + w*0.16, y + h*0.40 + bob, w*0.10, h*0.50);
+  ctx.fillRect(x + w*0.74, y + h*0.40 + bob, w*0.10, h*0.50);
+  // đai vàng
+  ctx.fillStyle = "#3a1a06";
+  ctx.fillRect(x + w*0.16, y + h*0.70 + bob, w*0.68, h*0.06);
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(x + w*0.45, y + h*0.70 + bob, w*0.10, h*0.06);
+  // đầu khỉ nâu
+  ctx.fillStyle = "#7a3a06";
+  ctx.beginPath(); ctx.arc(x + w/2, y + h*0.27 + bob, w*0.28, 0, Math.PI*2); ctx.fill();
+  // mặt sáng hơn
+  ctx.fillStyle = "#d4a070";
+  ctx.beginPath(); ctx.arc(x + w/2, y + h*0.30 + bob, w*0.18, 0, Math.PI*2); ctx.fill();
+  // tai
+  ctx.fillStyle = "#7a3a06";
+  ctx.beginPath(); ctx.arc(x + w*0.22, y + h*0.25 + bob, 9, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.78, y + h*0.25 + bob, 9, 0, Math.PI*2); ctx.fill();
+  // mắt giận dữ
+  ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.arc(x + w*0.42, y + h*0.27 + bob, 5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.58, y + h*0.27 + bob, 5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#000";
+  ctx.beginPath(); ctx.arc(x + w*0.42, y + h*0.27 + bob, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.58, y + h*0.27 + bob, 2.5, 0, Math.PI*2); ctx.fill();
+  // miệng
+  ctx.fillStyle = "#000";
+  ctx.fillRect(x + w*0.42, y + h*0.36 + bob, w*0.16, 3);
+  // vương miện
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(x + w*0.26, y + h*0.06 + bob, w*0.48, 6);
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(x + w*0.28 + i*w*0.13, y + h*0.06 + bob);
+    ctx.lineTo(x + w*0.34 + i*w*0.13, y + h*0.06 + bob - 12);
+    ctx.lineTo(x + w*0.40 + i*w*0.13, y + h*0.06 + bob);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#ff3838";
+  ctx.fillRect(x + w*0.47, y + h*0.08 + bob, 6, 6);
+  // tay cầm chuối
+  ctx.fillStyle = "#7a3a06";
+  ctx.fillRect(x + w*0.04, y + h*0.50 + bob, w*0.13, h*0.30);
+  ctx.fillRect(x + w*0.83, y + h*0.50 + bob, w*0.13, h*0.30);
+  // chuối ở tay phải
+  ctx.fillStyle = "#ffe04a";
+  ctx.beginPath();
+  ctx.ellipse(x + w*0.97, y + h*0.55 + bob, 14, 6, Math.PI*0.3, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = "#3a8a06";
+  ctx.fillRect(x + w*0.95 + 8, y + h*0.50 + bob - 2, 4, 4);
+}
+
+// ----- Hàm vẽ Bọ Cạp Khổng Lồ (Đảo 2) -----
+function drawGiantScorpion(b, camX, camY) {
+  const x = b.x - camX, y = b.y - camY;
+  const w = b.w, h = b.h;
+  const t = b.animTime;
+  const wob = Math.sin(t*0.15) * 3;
+  // chân (3 cặp)
+  ctx.fillStyle = "#1a0e2a";
+  for (let i = 0; i < 4; i++) {
+    ctx.fillRect(x + w*0.28 + i*w*0.12, y + h*0.78, 6, h*0.22);
+    ctx.fillRect(x + w*0.30 + i*w*0.12, y + h*0.92, w*0.06, 5);
+  }
+  // thân (đốt)
+  ctx.fillStyle = "#3a2a5e";
+  ctx.fillRect(x + w*0.20, y + h*0.45, w*0.62, h*0.38);
+  ctx.fillStyle = "#5a4a8e";
+  for (let i = 0; i < 5; i++) {
+    ctx.fillRect(x + w*0.22 + i*w*0.12, y + h*0.45, 3, h*0.38);
+  }
+  // đầu
+  ctx.fillStyle = "#3a2a5e";
+  ctx.beginPath(); ctx.arc(x + w*0.5, y + h*0.40, w*0.15, 0, Math.PI*2); ctx.fill();
+  // 4 mắt đỏ
+  ctx.fillStyle = "#ff2a2a";
+  ctx.beginPath(); ctx.arc(x + w*0.42, y + h*0.36, 3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.46, y + h*0.34, 3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.54, y + h*0.34, 3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.58, y + h*0.36, 3, 0, Math.PI*2); ctx.fill();
+  // 2 càng
+  ctx.fillStyle = "#3a2a5e";
+  // càng trái
+  ctx.fillRect(x + w*0.02, y + h*0.40, w*0.20, 14);
+  ctx.fillRect(x + w*0.02, y + h*0.40, 14, h*0.18);
+  ctx.fillRect(x + w*0.16, y + h*0.40, 14, h*0.18);
+  // càng phải
+  ctx.fillRect(x + w*0.78, y + h*0.40, w*0.20, 14);
+  ctx.fillRect(x + w*0.84, y + h*0.40, 14, h*0.18);
+  ctx.fillRect(x + w*0.98 - 14, y + h*0.40, 14, h*0.18);
+  // đuôi cong lên
+  ctx.fillStyle = "#3a2a5e";
+  ctx.fillRect(x + w*0.45, y + h*0.18 + wob, w*0.10, h*0.30);
+  ctx.fillRect(x + w*0.40, y + h*0.10 + wob, w*0.20, 12);
+  // gai độc
+  ctx.fillStyle = "#ff3838";
+  ctx.beginPath();
+  ctx.moveTo(x + w*0.50, y + h*0.0 + wob);
+  ctx.lineTo(x + w*0.42, y + h*0.10 + wob);
+  ctx.lineTo(x + w*0.58, y + h*0.10 + wob);
+  ctx.fill();
+  // hạt độc nhỏ
+  if (t % 4 === 0) {
+    spawnParticles(b.x + b.w*0.50, b.y + b.h*0.05, {
+      count: 1, color: "#5ec85a", speed: 1, size: 2, life: 26, gravity: 0.05
+    });
+  }
+}
+
+// ----- Hàm vẽ Người Tuyết Khổng Lồ (Đảo 3) -----
+function drawYeti(b, camX, camY) {
+  const x = b.x - camX, y = b.y - camY;
+  const w = b.w, h = b.h;
+  const t = b.animTime;
+  const bob = Math.sin(t*0.08) * 2;
+  // chân
+  ctx.fillStyle = "#e6f0ff";
+  ctx.fillRect(x + w*0.20, y + h*0.72 + bob, w*0.20, h*0.28);
+  ctx.fillRect(x + w*0.60, y + h*0.72 + bob, w*0.20, h*0.28);
+  // thân
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.ellipse(x + w/2, y + h*0.55 + bob, w*0.42, h*0.28, 0, 0, Math.PI*2);
+  ctx.fill();
+  // tay
+  ctx.fillStyle = "#e6f0ff";
+  ctx.fillRect(x - w*0.04, y + h*0.45 + bob, w*0.18, h*0.32);
+  ctx.fillRect(x + w*0.86, y + h*0.45 + bob, w*0.18, h*0.32);
+  // ngực bộ lông sẫm hơn
+  ctx.fillStyle = "#dde9f2";
+  ctx.fillRect(x + w*0.42, y + h*0.45 + bob, w*0.16, h*0.20);
+  // đầu
+  ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.arc(x + w/2, y + h*0.25 + bob, w*0.27, 0, Math.PI*2); ctx.fill();
+  // sừng
+  ctx.fillStyle = "#a0c0e0";
+  ctx.beginPath();
+  ctx.moveTo(x + w*0.30, y + h*0.10 + bob);
+  ctx.lineTo(x + w*0.18, y + h*0.0 + bob);
+  ctx.lineTo(x + w*0.36, y + h*0.04 + bob);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x + w*0.70, y + h*0.10 + bob);
+  ctx.lineTo(x + w*0.82, y + h*0.0 + bob);
+  ctx.lineTo(x + w*0.64, y + h*0.04 + bob);
+  ctx.fill();
+  // mắt
+  ctx.fillStyle = "#1a5a8a";
+  ctx.fillRect(x + w*0.36, y + h*0.22 + bob, 8, 8);
+  ctx.fillRect(x + w*0.56, y + h*0.22 + bob, 8, 8);
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(x + w*0.38, y + h*0.24 + bob, 3, 3);
+  ctx.fillRect(x + w*0.58, y + h*0.24 + bob, 3, 3);
+  // răng nanh
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(x + w*0.40, y + h*0.32 + bob, w*0.20, 8);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(x + w*0.42, y + h*0.32 + bob, 2, 6);
+  ctx.fillRect(x + w*0.46, y + h*0.32 + bob, 2, 6);
+  ctx.fillRect(x + w*0.52, y + h*0.32 + bob, 2, 6);
+  ctx.fillRect(x + w*0.56, y + h*0.32 + bob, 2, 6);
+  // hạt tuyết bay quanh
+  if (t % 6 === 0) {
+    spawnParticles(b.x + rand(0, b.w), b.y + rand(0, b.h*0.4), {
+      count: 1, color: "#dff4ff", speed: 0.5, size: 2, life: 40, gravity: 0.05
+    });
+  }
+}
+
+// ----- Hàm vẽ Hổ Lửa (Đảo 4) -----
+function drawFireTiger(b, camX, camY) {
+  const x = b.x - camX, y = b.y - camY;
+  const w = b.w, h = b.h;
+  const t = b.animTime;
+  const bob = Math.sin(t*0.12) * 2;
+  // hào quang lửa
+  for (let i = 0; i < 3; i++) {
+    ctx.globalAlpha = 0.18 + 0.18 * Math.sin(t * 0.2 + i);
+    ctx.fillStyle = ["#ff3838","#ff8a3c","#ffd24a"][i];
+    ctx.beginPath();
+    ctx.arc(x + w/2, y + h*0.55, w*0.55 + i*5, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // chân
+  ctx.fillStyle = "#ff8a3c";
+  ctx.fillRect(x + w*0.18, y + h*0.78 + bob, w*0.16, h*0.22);
+  ctx.fillRect(x + w*0.66, y + h*0.78 + bob, w*0.16, h*0.22);
+  ctx.fillStyle = "#3a1a06";
+  ctx.fillRect(x + w*0.18, y + h*0.94 + bob, w*0.16, h*0.06);
+  ctx.fillRect(x + w*0.66, y + h*0.94 + bob, w*0.16, h*0.06);
+  // thân
+  ctx.fillStyle = "#ff8a3c";
+  ctx.beginPath();
+  ctx.ellipse(x + w/2, y + h*0.6 + bob, w*0.42, h*0.28, 0, 0, Math.PI*2);
+  ctx.fill();
+  // sọc đen
+  ctx.fillStyle = "#1a0a06";
+  for (let i = 0; i < 5; i++) {
+    ctx.fillRect(x + w*0.18 + i*w*0.16, y + h*0.40 + bob, 4, h*0.4);
+  }
+  // đuôi
+  ctx.fillStyle = "#ff8a3c";
+  ctx.fillRect(x + w*0.85, y + h*0.45 + bob, w*0.15, 8);
+  ctx.fillRect(x + w*0.95, y + h*0.30 + bob, 8, h*0.20);
+  ctx.fillStyle = "#1a0a06";
+  ctx.fillRect(x + w*0.95, y + h*0.30 + bob, 8, 4);
+  ctx.fillRect(x + w*0.95, y + h*0.40 + bob, 8, 4);
+  // đầu
+  ctx.fillStyle = "#ff8a3c";
+  ctx.beginPath(); ctx.arc(x + w*0.5, y + h*0.32 + bob, w*0.27, 0, Math.PI*2); ctx.fill();
+  // tai
+  ctx.fillStyle = "#a51212";
+  ctx.beginPath();
+  ctx.moveTo(x + w*0.30, y + h*0.18 + bob);
+  ctx.lineTo(x + w*0.36, y + h*0.06 + bob);
+  ctx.lineTo(x + w*0.44, y + h*0.20 + bob);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x + w*0.70, y + h*0.18 + bob);
+  ctx.lineTo(x + w*0.64, y + h*0.06 + bob);
+  ctx.lineTo(x + w*0.56, y + h*0.20 + bob);
+  ctx.fill();
+  // sọc trán
+  ctx.fillStyle = "#1a0a06";
+  ctx.fillRect(x + w*0.36, y + h*0.14 + bob, 4, 12);
+  ctx.fillRect(x + w*0.60, y + h*0.14 + bob, 4, 12);
+  // mắt vàng dữ
+  ctx.fillStyle = "#ffe04a";
+  ctx.beginPath(); ctx.arc(x + w*0.42, y + h*0.30 + bob, 5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.58, y + h*0.30 + bob, 5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#000";
+  ctx.beginPath(); ctx.arc(x + w*0.42, y + h*0.30 + bob, 2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.58, y + h*0.30 + bob, 2, 0, Math.PI*2); ctx.fill();
+  // miệng + nanh
+  ctx.fillStyle = "#a51212";
+  ctx.fillRect(x + w*0.42, y + h*0.42 + bob, w*0.16, 6);
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.moveTo(x + w*0.45, y + h*0.42 + bob);
+  ctx.lineTo(x + w*0.47, y + h*0.50 + bob);
+  ctx.lineTo(x + w*0.49, y + h*0.42 + bob);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x + w*0.51, y + h*0.42 + bob);
+  ctx.lineTo(x + w*0.53, y + h*0.50 + bob);
+  ctx.lineTo(x + w*0.55, y + h*0.42 + bob);
+  ctx.fill();
+  // tia lửa rơi
+  if (t % 5 === 0) {
+    spawnParticles(b.x + rand(0, b.w), b.y + b.h * 0.7, {
+      count: 1, color: choice(["#ff3838","#ff8a3c","#ffd24a"]),
+      speed: 0.5, size: 3, life: 25, gravity: -0.05
+    });
+  }
+}
+
+// ----- Hàm vẽ Vua Hải Tặc Đen (Đảo 5) -----
+function drawDarkKing(b, camX, camY) {
+  const x = b.x - camX, y = b.y - camY;
+  const w = b.w, h = b.h;
+  const t = b.animTime;
+  const bob = Math.sin(t*0.07) * 3;
+  // bóng tối quanh người
+  ctx.globalAlpha = 0.4;
+  ctx.fillStyle = "#3a1a5e";
+  ctx.beginPath();
+  ctx.ellipse(x + w/2, y + h*0.55, w*0.55, h*0.45, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  // ủng đen
+  ctx.fillStyle = "#1a1a1a";
+  ctx.fillRect(x + w*0.30, y + h*0.78 + bob, w*0.15, h*0.22);
+  ctx.fillRect(x + w*0.55, y + h*0.78 + bob, w*0.15, h*0.22);
+  // áo choàng đen
+  ctx.fillStyle = "#1a0e2a";
+  ctx.fillRect(x + w*0.18, y + h*0.40 + bob, w*0.64, h*0.42);
+  // viền vàng
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(x + w*0.18, y + h*0.40 + bob, w*0.64, 4);
+  ctx.fillRect(x + w*0.18, y + h*0.80 + bob, w*0.64, 3);
+  ctx.fillRect(x + w*0.48, y + h*0.40 + bob, 4, h*0.42);
+  // đầu
+  ctx.fillStyle = "#d4a070";
+  ctx.beginPath(); ctx.arc(x + w*0.5, y + h*0.30 + bob, w*0.18, 0, Math.PI*2); ctx.fill();
+  // mắt đỏ phát sáng
+  ctx.fillStyle = "#ff0000";
+  ctx.beginPath(); ctx.arc(x + w*0.43, y + h*0.28 + bob, 4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + w*0.57, y + h*0.28 + bob, 4, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(x + w*0.41, y + h*0.27 + bob, 2, 2);
+  ctx.fillRect(x + w*0.55, y + h*0.27 + bob, 2, 2);
+  // miệng
+  ctx.fillStyle = "#3a1a06";
+  ctx.fillRect(x + w*0.44, y + h*0.34 + bob, w*0.12, 3);
+  // mũ ba góc
+  ctx.fillStyle = "#0a0a0a";
+  ctx.beginPath();
+  ctx.moveTo(x + w*0.18, y + h*0.16 + bob);
+  ctx.lineTo(x + w*0.50, y + h*0.02 + bob);
+  ctx.lineTo(x + w*0.82, y + h*0.16 + bob);
+  ctx.lineTo(x + w*0.85, y + h*0.22 + bob);
+  ctx.lineTo(x + w*0.15, y + h*0.22 + bob);
+  ctx.fill();
+  // đầu lâu trên mũ
+  ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.arc(x + w*0.5, y + h*0.12 + bob, 6, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#000";
+  ctx.fillRect(x + w*0.48, y + h*0.11 + bob, 2, 2);
+  ctx.fillRect(x + w*0.51, y + h*0.11 + bob, 2, 2);
+  // xương chéo
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(x + w*0.47, y + h*0.16 + bob, 8, 2);
+  // kiếm trên tay phải
+  ctx.fillStyle = "#cfd6e0";
+  ctx.fillRect(x + w*0.85, y + h*0.30 + bob, 6, h*0.50);
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(x + w*0.86, y + h*0.30 + bob, 1, h*0.40);
+  ctx.fillStyle = "#3a1a06";
+  ctx.fillRect(x + w*0.81, y + h*0.78 + bob, 14, 5);
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(x + w*0.86, y + h*0.84 + bob, 4, 8);
+  // tay trái
+  ctx.fillStyle = "#1a0e2a";
+  ctx.fillRect(x + w*0.04, y + h*0.42 + bob, w*0.14, h*0.30);
+  // hạt năng lượng tím
+  if (t % 6 === 0) {
+    spawnParticles(b.x + b.w/2 + rand(-30, 30), b.y + b.h/2 + rand(-20, 20), {
+      count: 1, color: "#a26bff", speed: 1, size: 3, life: 35, gravity: -0.06
+    });
+  }
+}
+
+// ----- Kỹ năng riêng cho từng boss -----
+
+// Vua Khỉ Đỏ: ném 3 quả chuối hình parabol (có trọng lực)
+function bossSkillMonkey(b, player) {
+  const cx = b.x + b.w/2, cy = b.y + b.h*0.25;
+  const dxA = (player.x + player.w/2) - cx;
+  const dyA = (player.y + player.h/2) - cy;
+  for (let k = 0; k < 3; k++) {
+    const flightTime = 50 + k * 6;
+    const orb = new MagicOrb(cx - 10, cy - 10, 1, 0, "enemy", {
+      color: "#ffd24a", glow: "#fff5a0",
+      dmg: b.dmg, speed: 1, size: 18, gravity: 0.4
+    });
+    orb.vx = dxA / flightTime;
+    orb.vy = (dyA - 0.5 * 0.4 * flightTime * flightTime) / flightTime;
+    orb.life = flightTime + 30;
+    enemyOrbs.push(orb);
+  }
+}
+
+// Bọ Cạp Khổng Lồ: bắn 5 đạn độc xanh hình quạt
+function bossSkillScorpion(b, player) {
+  const cx = b.x + b.w/2, cy = b.y + b.h*0.05;   // đuôi ở trên
+  const dxA = (player.x + player.w/2) - cx;
+  const dyA = (player.y + player.h/2) - cy;
+  const baseAng = Math.atan2(dyA, dxA);
+  for (let k = -2; k <= 2; k++) {
+    const a = baseAng + k * 0.18;
+    enemyOrbs.push(new MagicOrb(cx - 8, cy, Math.cos(a), Math.sin(a), "enemy", {
+      color: "#5ec85a", glow: "#aef0a8",
+      dmg: b.dmg * 0.8, speed: 9, size: 14
+    }));
+  }
+}
+
+// Yeti: tỏa 8 đạn băng ra mọi hướng
+function bossSkillYeti(b, player) {
+  const cx = b.x + b.w/2, cy = b.y + b.h/2;
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    enemyOrbs.push(new MagicOrb(cx - 10, cy - 10, Math.cos(a), Math.sin(a), "enemy", {
+      color: "#9ee0ff", glow: "#dff4ff",
+      dmg: b.dmg * 0.7, speed: 6, size: 18
+    }));
+  }
+  spawnParticles(cx, cy, {
+    count: 30, color: "#dff4ff", speed: 5, size: 4, life: 30
+  });
+}
+
+// Hổ Lửa: phun 5 quả lửa hẹp + lao về phía người chơi
+function bossSkillTiger(b, player) {
+  const cx = b.x + b.w/2, cy = b.y + b.h/2;
+  const dxA = (player.x + player.w/2) - cx;
+  const dyA = (player.y + player.h/2) - cy;
+  const baseAng = Math.atan2(dyA, dxA);
+  for (let k = -2; k <= 2; k++) {
+    const a = baseAng + k * 0.10;
+    enemyOrbs.push(new MagicOrb(cx - 10, cy - 10, Math.cos(a), Math.sin(a), "enemy", {
+      color: "#ff8a3c", glow: "#ffd4a8",
+      dmg: b.dmg * 0.9, speed: 11, size: 18
+    }));
+  }
+  // bứt tốc về phía player
+  b.vx = Math.sign(dxA || 1) * 9;
+  b.vy = -7;
+}
+
+// Vua Hải Tặc Đen: 6 đạn tỏa tròn + 2 đạn nhanh tới người chơi
+function bossSkillDarkKing(b, player) {
+  const cx = b.x + b.w/2, cy = b.y + b.h/2;
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2;
+    enemyOrbs.push(new MagicOrb(cx - 10, cy - 10, Math.cos(a), Math.sin(a), "enemy", {
+      color: "#a26bff", glow: "#cba9ff",
+      dmg: b.dmg * 0.9, speed: 5, size: 18
+    }));
+  }
+  const dxA = (player.x + player.w/2) - cx;
+  const dyA = (player.y + player.h/2) - cy;
+  const baseAng = Math.atan2(dyA, dxA);
+  for (let k = -1; k <= 1; k += 2) {
+    const a = baseAng + k * 0.06;
+    enemyOrbs.push(new MagicOrb(cx - 10, cy - 10, Math.cos(a), Math.sin(a), "enemy", {
+      color: "#fff", glow: "#cba9ff",
+      dmg: b.dmg, speed: 12, size: 14
+    }));
+  }
+}
+
+// Bảng tra cứu boss: kích thước, chỉ số, hàm vẽ và kỹ năng
+const BOSS_KINDS = {
+  monkey_king:    { name: "Vua Khỉ Đỏ",            w: 100, h: 120, hpMul: 1.0, dmgMul: 1.0, cooldown: 70, draw: drawMonkeyKing,    skill: bossSkillMonkey   },
+  giant_scorpion: { name: "Bọ Cạp Khổng Lồ",       w: 130, h: 100, hpMul: 1.0, dmgMul: 1.0, cooldown: 50, draw: drawGiantScorpion, skill: bossSkillScorpion },
+  yeti:           { name: "Người Tuyết Khổng Lồ",  w: 110, h: 130, hpMul: 1.3, dmgMul: 0.9, cooldown: 95, draw: drawYeti,          skill: bossSkillYeti     },
+  fire_tiger:     { name: "Hổ Lửa",                w: 130, h: 100, hpMul: 1.0, dmgMul: 1.1, cooldown: 60, draw: drawFireTiger,     skill: bossSkillTiger    },
+  dark_king:      { name: "Vua Hải Tặc Đen",       w: 100, h: 130, hpMul: 1.5, dmgMul: 1.2, cooldown: 80, draw: drawDarkKing,      skill: bossSkillDarkKing }
+};
+
+// ===========================================================================
+// 10) THIẾT KẾ 5 ĐẢO -------------------------------------------------------
+//     Mỗi đảo có chủ đề khác nhau, lính canh, thú rừng, boss và vật phẩm
+// ===========================================================================
+const ISLAND_CONFIGS = [
+  {
+    name: "Đảo Cỏ Xanh",
+    skyTop: "#7ed6ff", skyBot: "#cdebff",
+    groundTop: "#6ec85a", groundBot: "#3a7a2a",
+    sandTop: "#f7e4a8",
+    waterColor: "#1c8ad0",
+    bossName: "Vua Khỉ Đỏ",
+    bossKind: "monkey_king",
+    bossTheme: "monkey",
+    beastThemes: ["snake", "boar", "monkey", "wolf", "tiger"],
+    decoration: "tree",
+    quests: [
+      { type: "kill_guards", count: 5, text: "Đánh bại 5 lính canh trên đảo" },
+      { type: "collect_coins", count: 5, text: "Thu thập 5 tiền vàng" },
+      { type: "kill_boss", count: 1, text: "Đánh bại boss Vua Khỉ Đỏ" }
+    ]
+  },
+  {
+    name: "Đảo Sa Mạc Vàng",
+    skyTop: "#ffc97a", skyBot: "#ffe6b8",
+    groundTop: "#e6b85a", groundBot: "#a87a2a",
+    sandTop: "#f5d680",
+    waterColor: "#1c8ad0",
+    bossName: "Bọ Cạp Khổng Lồ",
+    bossKind: "giant_scorpion",
+    bossTheme: "spider",
+    beastThemes: ["snake", "spider", "wolf", "tiger", "boar"],
+    decoration: "cactus",
+    quests: [
+      { type: "kill_beasts", count: 5, text: "Tiêu diệt 5 thú rừng" },
+      { type: "collect_fruit", count: 1, text: "Tìm 1 trái ma thuật bí mật" },
+      { type: "kill_boss", count: 1, text: "Đánh bại Bọ Cạp Khổng Lồ" }
+    ]
+  },
+  {
+    name: "Đảo Tuyết Trắng",
+    skyTop: "#aee0ff", skyBot: "#e8f5ff",
+    groundTop: "#ffffff", groundBot: "#b8d8e6",
+    sandTop: "#dde9f2",
+    waterColor: "#0c5a8a",
+    bossName: "Người Tuyết Khổng Lồ",
+    bossKind: "yeti",
+    bossTheme: "yeti",
+    beastThemes: ["wolf", "bear", "yeti", "wolf", "bear"],
+    decoration: "pine",
+    quests: [
+      { type: "kill_guards", count: 5, text: "Hạ gục 5 lính canh băng giá" },
+      { type: "kill_beasts", count: 5, text: "Hạ 5 thú rừng tuyết" },
+      { type: "kill_boss", count: 1, text: "Đánh bại Người Tuyết Khổng Lồ" }
+    ]
+  },
+  {
+    name: "Đảo Núi Lửa",
+    skyTop: "#ff7a3c", skyBot: "#ffb87a",
+    groundTop: "#7a3a1a", groundBot: "#3a1a06",
+    sandTop: "#a85a2a",
+    waterColor: "#a51212",
+    bossName: "Hổ Lửa",
+    bossKind: "fire_tiger",
+    bossTheme: "tiger",
+    beastThemes: ["tiger", "snake", "boar", "wolf", "spider"],
+    decoration: "rock",
+    quests: [
+      { type: "collect_coins", count: 8, text: "Nhặt 8 tiền vàng giữa dung nham" },
+      { type: "kill_guards", count: 5, text: "Đánh bại 5 lính canh núi lửa" },
+      { type: "kill_boss", count: 1, text: "Đánh bại Hổ Lửa" }
+    ]
+  },
+  {
+    name: "Đảo Trời Mây",
+    skyTop: "#ff9bd4", skyBot: "#cdc7ff",
+    groundTop: "#cba9ff", groundBot: "#6a4ab0",
+    sandTop: "#e0d2ff",
+    waterColor: "#1c2a8a",
+    bossName: "Vua Hải Tặc Đen",
+    bossKind: "dark_king",
+    bossTheme: "spider",
+    beastThemes: ["spider", "snake", "yeti", "wolf", "tiger"],
+    decoration: "cloud",
+    quests: [
+      { type: "kill_guards", count: 5, text: "Đánh bại 5 lính tinh nhuệ" },
+      { type: "kill_beasts", count: 5, text: "Đánh bại 5 thú huyền thoại" },
+      { type: "kill_boss", count: 1, text: "Đánh bại VUA HẢI TẶC ĐEN!" }
+    ]
+  }
+];
+
+// ===========================================================================
+// 11) TẠO ĐẢO (Level Builder) ----------------------------------------------
+//     Tạo nền tảng, kẻ thù, vật phẩm cho 1 đảo
+// ===========================================================================
+function buildIsland(index) {
+  const cfg = ISLAND_CONFIGS[index];
+  const level = {
+    name: cfg.name,
+    config: cfg,
+    width: 4200,
+    groundY: 560,
+    deathY: 900,
+    spawnX: 100,
+    spawnY: 400,
+    platforms: [],
+    enemies: [],
+    items: [],
+    npcs: [],
+    boats: [],
+    decorations: []
+  };
+
+  // Nền chính
+  level.platforms.push({ x: 0, y: 560, w: 1200, h: 200, type: "ground" });
+  level.platforms.push({ x: 1280, y: 560, w: 900, h: 200, type: "ground" });
+  level.platforms.push({ x: 2260, y: 560, w: 800, h: 200, type: "ground" });
+  level.platforms.push({ x: 3140, y: 560, w: 1060, h: 200, type: "ground" });
+
+  // Các bục lơ lửng
+  const floats = [
+    { x: 320, y: 460, w: 140, h: 24 },
+    { x: 540, y: 380, w: 140, h: 24 },
+    { x: 760, y: 320, w: 120, h: 24 },
+    { x: 1100, y: 420, w: 180, h: 24 },
+    { x: 1450, y: 360, w: 160, h: 24 },
+    { x: 1700, y: 280, w: 140, h: 24 },
+    { x: 2000, y: 380, w: 160, h: 24 },
+    { x: 2400, y: 320, w: 140, h: 24 },
+    { x: 2620, y: 420, w: 140, h: 24 },
+    { x: 2900, y: 350, w: 160, h: 24 },
+    { x: 3200, y: 440, w: 140, h: 24 },
+    { x: 3450, y: 360, w: 160, h: 24 },
+    { x: 3700, y: 300, w: 140, h: 24 }
+  ];
+  for (const f of floats) {
+    level.platforms.push({ ...f, type: "float" });
+  }
+
+  // NPC giao nhiệm vụ ngay đầu đảo
+  level.npcs.push(new QuestNPC(180, 512, index));
+
+  // Sinh 5 lính canh rải đều khắp đảo
+  const guardSpots = [600, 1300, 2050, 2700, 3500];
+  for (const gx of guardSpots) {
+    const e = new Enemy(gx, 500, {
+      kind: "guard",
+      hp: 70 + index * 30,        // dày máu hơn nhiều
+      dmg: 14 + index * 5,        // gây sát thương cao hơn
+      scoreReward: 60 + index * 20,
+      goldReward: 6 + index * 2
+    });
+    level.enemies.push(e);
+  }
+
+  // Sinh 5 thú rừng - nhanh và hung dữ
+  const beastSpots = [400, 980, 1600, 2300, 3300];
+  for (let i = 0; i < beastSpots.length; i++) {
+    const e = new Enemy(beastSpots[i], 500, {
+      kind: "beast",
+      theme: cfg.beastThemes[i % cfg.beastThemes.length],
+      hp: 55 + index * 25,
+      dmg: 12 + index * 4,
+      w: 42, h: 42,
+      scoreReward: 50 + index * 15,
+      goldReward: 5 + index * 2
+    });
+    level.enemies.push(e);
+  }
+
+  // Sinh boss ở cuối đảo - mỗi đảo 1 boss khác nhau (xem BOSS_KINDS)
+  const bk = BOSS_KINDS[cfg.bossKind] || {};
+  const bossW = bk.w || 80, bossH = bk.h || 100;
+  const boss = new Enemy(3850, 560 - bossH, {
+    kind: "boss",
+    boss: true,
+    bossKind: cfg.bossKind,
+    bossName: cfg.bossName,
+    hp:  Math.round((450 + index * 200) * (bk.hpMul  || 1)),
+    dmg: Math.round((24  + index * 7)   * (bk.dmgMul || 1)),
+    w: bossW, h: bossH,
+    scoreReward: 500 + index * 200,
+    goldReward: 50 + index * 25
+  });
+  level.enemies.push(boss);
+  level.boss = boss;
+
+  // Tiền vàng - rải nhiều khắp đảo (>= 10)
+  const coinSpots = [
+    [350, 420], [380, 420], [410, 420],
+    [580, 340], [610, 340], [640, 340],
+    [800, 280], [830, 280],
+    [1140, 380], [1180, 380], [1220, 380],
+    [1490, 320], [1520, 320],
+    [1740, 240], [1770, 240], [1800, 240],
+    [2050, 340], [2080, 340],
+    [2440, 280], [2470, 280],
+    [2660, 380], [2940, 310], [2970, 310],
+    [3240, 400], [3270, 400], [3490, 320], [3740, 260]
+  ];
+  for (const [cx, cy] of coinSpots) {
+    level.items.push(new Item(cx, cy, "coin"));
+  }
+
+  // Trái ma thuật - ít, quý
+  level.items.push(new Item(1750, 240, "fruit"));
+  level.items.push(new Item(2950, 310, "fruit"));
+  if (index >= 2) level.items.push(new Item(3500, 320, "fruit"));
+
+  // Thuyền ở cuối đảo (xuất hiện sau khi giết boss)
+  level.boats.push(new Boat(4050, 540));
+
+  // Cây/đá trang trí
+  for (let i = 0; i < 25; i++) {
+    level.decorations.push({
+      x: 60 + i * 165 + rand(-30, 30),
+      y: 560,
+      kind: cfg.decoration,
+      size: rand(0.8, 1.2)
+    });
+  }
+
+  return level;
+}
+
+// ===========================================================================
+// 12) NHIỆM VỤ -------------------------------------------------------------
+// ===========================================================================
+function makeQuestState(islandIdx) {
+  const cfg = ISLAND_CONFIGS[islandIdx];
+  return cfg.quests.map(q => ({
+    type: q.type,
+    text: q.text,
+    target: q.count,
+    progress: 0,
+    done: false
+  }));
+}
+
+function updateQuests(quests, event) {
+  // event = { type: "kill_guard" | "kill_beast" | "kill_boss" | "collect_coin" | "collect_fruit" }
+  for (const q of quests) {
+    if (q.done) continue;
+    let inc = 0;
+    if (q.type === "kill_guards"   && event === "kill_guard")    inc = 1;
+    if (q.type === "kill_beasts"   && event === "kill_beast")    inc = 1;
+    if (q.type === "kill_boss"     && event === "kill_boss")     inc = 1;
+    if (q.type === "collect_coins" && event === "collect_coin")  inc = 1;
+    if (q.type === "collect_fruit" && event === "collect_fruit") inc = 1;
+    if (inc) {
+      q.progress = Math.min(q.target, q.progress + inc);
+      if (q.progress >= q.target) q.done = true;
+    }
+  }
+}
+function allQuestsDone(quests) {
+  return quests.every(q => q.done);
+}
+
+// ===========================================================================
+// 13) VẼ NỀN VÀ TRANG TRÍ --------------------------------------------------
+// ===========================================================================
+function drawBackground(level, camX) {
+  const cfg = level.config;
+  // bầu trời gradient
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, cfg.skyTop);
+  g.addColorStop(1, cfg.skyBot);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // mặt trời / mặt trăng
+  ctx.fillStyle = "rgba(255,255,255,0.6)";
+  ctx.beginPath(); ctx.arc(W - 160, 120, 60, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#fff5a0";
+  ctx.beginPath(); ctx.arc(W - 160, 120, 44, 0, Math.PI * 2); ctx.fill();
+
+  // mây trôi (parallax)
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  for (let i = 0; i < 8; i++) {
+    const cx = ((i * 320 - camX * 0.2) % (W + 200) + (W + 200)) % (W + 200) - 100;
+    const cy = 80 + (i % 3) * 50;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 28, 0, Math.PI * 2);
+    ctx.arc(cx + 24, cy + 4, 22, 0, Math.PI * 2);
+    ctx.arc(cx - 24, cy + 6, 20, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // núi xa (parallax)
+  ctx.fillStyle = cfg.groundBot;
+  ctx.globalAlpha = 0.5;
+  for (let i = 0; i < 10; i++) {
+    const mx = ((i * 380 - camX * 0.4) % (W + 400) + (W + 400)) % (W + 400) - 200;
+    const my = 380;
+    ctx.beginPath();
+    ctx.moveTo(mx, my + 200);
+    ctx.lineTo(mx + 180, my);
+    ctx.lineTo(mx + 360, my + 200);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // biển ở dưới cùng
+  ctx.fillStyle = cfg.waterColor;
+  ctx.fillRect(0, 660, W, H - 660);
+  // sóng
+  ctx.fillStyle = "rgba(255,255,255,0.4)";
+  for (let i = 0; i < 30; i++) {
+    const wx = ((i * 60 - camX * 0.6) % (W + 60) + (W + 60)) % (W + 60);
+    ctx.fillRect(wx, 670 + (i % 3) * 8, 30, 3);
+  }
+}
+
+function drawPlatforms(level, camX, camY) {
+  const cfg = level.config;
+  for (const p of level.platforms) {
+    const px = p.x - camX, py = p.y - camY;
+    if (px + p.w < -50 || px > W + 50) continue; // ngoài màn hình thì bỏ qua
+    if (p.type === "ground") {
+      // đất chính
+      ctx.fillStyle = cfg.groundTop;
+      ctx.fillRect(px, py, p.w, 12);
+      ctx.fillStyle = cfg.sandTop;
+      ctx.fillRect(px, py + 12, p.w, 8);
+      ctx.fillStyle = cfg.groundBot;
+      ctx.fillRect(px, py + 20, p.w, p.h - 20);
+      // chấm nhỏ trang trí
+      ctx.fillStyle = "rgba(0,0,0,0.15)";
+      for (let i = 0; i < p.w; i += 24) {
+        ctx.fillRect(px + i + 6, py + 30, 3, 3);
+        ctx.fillRect(px + i + 14, py + 60, 3, 3);
+      }
+    } else {
+      // bục lơ lửng
+      ctx.fillStyle = cfg.groundBot;
+      ctx.fillRect(px, py + 4, p.w, p.h);
+      ctx.fillStyle = cfg.groundTop;
+      ctx.fillRect(px, py, p.w, 8);
+      ctx.fillStyle = cfg.sandTop;
+      ctx.fillRect(px, py + 8, p.w, 4);
+    }
+  }
+}
+
+function drawDecorations(level, camX, camY) {
+  for (const d of level.decorations) {
+    const px = d.x - camX, py = d.y - camY;
+    if (px < -100 || px > W + 100) continue;
+    const s = d.size;
+    if (d.kind === "tree") {
+      // cây dừa / cây xanh đơn giản
+      ctx.fillStyle = "#5a3a1a";
+      ctx.fillRect(px - 4 * s, py - 70 * s, 8 * s, 70 * s);
+      ctx.fillStyle = "#3a8a2a";
+      ctx.beginPath(); ctx.arc(px, py - 70 * s, 28 * s, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#6ec85a";
+      ctx.beginPath(); ctx.arc(px - 8, py - 76 * s, 18 * s, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px + 12, py - 72 * s, 16 * s, 0, Math.PI * 2); ctx.fill();
+    } else if (d.kind === "cactus") {
+      ctx.fillStyle = "#2a8a4a";
+      ctx.fillRect(px - 6, py - 56, 12, 56);
+      ctx.fillRect(px - 18, py - 38, 6, 22);
+      ctx.fillRect(px + 12, py - 46, 6, 26);
+    } else if (d.kind === "pine") {
+      ctx.fillStyle = "#5a3a1a";
+      ctx.fillRect(px - 4, py - 20, 8, 20);
+      ctx.fillStyle = "#1a5a2a";
+      ctx.beginPath();
+      ctx.moveTo(px, py - 90);
+      ctx.lineTo(px + 28, py - 20);
+      ctx.lineTo(px - 28, py - 20);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(px, py - 70);
+      ctx.lineTo(px + 22, py - 30);
+      ctx.lineTo(px - 22, py - 30);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(px - 22, py - 24, 44, 4);
+    } else if (d.kind === "rock") {
+      ctx.fillStyle = "#3a1a06";
+      ctx.beginPath(); ctx.arc(px, py - 14, 22, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#7a3a1a";
+      ctx.beginPath(); ctx.arc(px - 4, py - 18, 14, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#ff7a3c";
+      ctx.fillRect(px - 16, py - 4, 32, 4); // dung nham
+    } else if (d.kind === "cloud") {
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.beginPath(); ctx.arc(px, py - 30, 18, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px + 16, py - 26, 14, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px - 16, py - 22, 12, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+// ===========================================================================
+// 14) CAMERA ---------------------------------------------------------------
+// ===========================================================================
+const camera = { x: 0, y: 0, tx: 0, ty: 0 };
+function updateCamera(player, level) {
+  camera.tx = player.x + player.w / 2 - W / 2;
+  camera.ty = player.y + player.h / 2 - H / 2 - 60;
+  camera.tx = clamp(camera.tx, 0, level.width - W);
+  camera.ty = clamp(camera.ty, -120, 200);
+  // camera đuổi mượt
+  camera.x += (camera.tx - camera.x) * 0.12;
+  camera.y += (camera.ty - camera.y) * 0.12;
+}
+
+// ===========================================================================
+// 15) ĐIỀU KHIỂN -----------------------------------------------------------
+// ===========================================================================
+const input = {
+  left: false, right: false, up: false, down: false,
+  jump: false, mouseDown: false, mouseX: 0, mouseY: 0
+};
+window.addEventListener("keydown", e => {
+  // Khi đang nhập tên: bắt mọi phím chữ/số/khoảng trắng
+  if (typeof gameState !== "undefined" && gameState === STATE.NAME_INPUT) {
+    if (e.code === "Backspace") {
+      typedName = typedName.slice(0, -1);
+      e.preventDefault();
+      return;
+    }
+    if (e.code === "Enter") {
+      input.enter = true;
+      e.preventDefault();
+      return;
+    }
+    if (e.code === "Escape") { input.esc = true; return; }
+    // chấp nhận chữ La-tinh, số, khoảng trắng và ký tự tiếng Việt có dấu
+    if (e.key && e.key.length === 1 && typedName.length < 14) {
+      if (/[A-Za-z0-9 _\-]/.test(e.key) ||
+          /[À-ɏḀ-ỿ]/.test(e.key)) {
+        typedName += e.key;
+      }
+    }
+    return;   // chặn không cho phím game chạy lúc đang gõ tên
+  }
+  if (e.code === "ArrowLeft")  input.left = true;
+  if (e.code === "ArrowRight") input.right = true;
+  if (e.code === "ArrowUp")    input.up = true;
+  if (e.code === "ArrowDown")  input.down = true;
+  if (e.code === "Space")      { input.jump = true; e.preventDefault(); }
+  if (e.code === "Enter")      input.enter = true;
+  if (e.code === "Escape")     input.esc = true;
+  if (e.code === "KeyE")       input.shopKey = true;
+  // Phím 1-6: chuyển sang sức mạnh tương ứng (chỉ nếu đã sở hữu)
+  if (e.code && e.code.startsWith("Digit")) {
+    const n = parseInt(e.code.slice(5), 10);
+    if (n >= 1 && n <= POWER_ORDER.length && player) {
+      const target = POWER_ORDER[n - 1];
+      if (player.inventory.includes(target) && player.power !== target) {
+        player.power = target;
+        showNotice("Sức mạnh: " + POWERS[target].name, 80);
+        sfxCoin();
+      }
+    }
+  }
+  // Phím Q: xoay vòng qua các sức mạnh đang có
+  if (e.code === "KeyQ" && player && player.inventory.length > 1) {
+    const cur  = player.inventory.indexOf(player.power);
+    const next = (cur + 1) % player.inventory.length;
+    player.power = player.inventory[next];
+    showNotice("Sức mạnh: " + POWERS[player.power].name, 80);
+    sfxCoin();
+  }
+});
+window.addEventListener("keyup", e => {
+  if (e.code === "ArrowLeft")  input.left = false;
+  if (e.code === "ArrowRight") input.right = false;
+  if (e.code === "ArrowUp")    input.up = false;
+  if (e.code === "ArrowDown")  input.down = false;
+  if (e.code === "Space")      input.jump = false;
+  if (e.code === "Enter")      input.enter = false;
+  if (e.code === "Escape")     input.esc = false;
+  if (e.code === "KeyE")       input.shopKey = false;
+});
+canvas.addEventListener("mousemove", e => {
+  const rect = canvas.getBoundingClientRect();
+  input.mouseX = (e.clientX - rect.left) * (W / rect.width);
+  input.mouseY = (e.clientY - rect.top) * (H / rect.height);
+});
+canvas.addEventListener("mousedown", e => {
+  if (e.button === 0) input.mouseDown = true;
+});
+canvas.addEventListener("mouseup", e => {
+  if (e.button === 0) input.mouseDown = false;
+});
+// chặn menu chuột phải
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+// ===========================================================================
+// 16) GAME STATE -----------------------------------------------------------
+// ===========================================================================
+const STATE = {
+  TITLE:      "title",
+  NAME_INPUT: "name_input",
+  PLAYING:    "playing",
+  QUEST:      "quest",
+  SHOP:       "shop",
+  WIN:        "win",
+  GAMEOVER:   "gameover"
+};
+
+// =====================================================================
+// BẢNG XẾP HẠNG (lưu vào localStorage để giữ qua các lần chơi)
+// =====================================================================
+const LB_KEY = "islandPirates_leaderboard_v1";
+function loadLeaderboard() {
+  try {
+    const raw = localStorage.getItem(LB_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+function saveLeaderboard(list) {
+  try { localStorage.setItem(LB_KEY, JSON.stringify(list)); } catch (e) {}
+}
+// Thêm điểm vào bảng, trả về danh sách top 10 mới
+function addScoreToLeaderboard(name, score, islandsCleared, won) {
+  const list = loadLeaderboard();
+  const entry = {
+    name: (name || "Hải Tặc").toString().slice(0, 14),
+    score: Math.max(0, Math.floor(score)),
+    islands: islandsCleared | 0,
+    won: !!won,
+    date: new Date().toISOString().slice(0, 10)
+  };
+  list.push(entry);
+  list.sort((a, b) => b.score - a.score);
+  const top = list.slice(0, 10);
+  saveLeaderboard(top);
+  return { top, entry };
+}
+
+// Lưu trữ tạm khi đang nhập tên
+let typedName = "";
+let scoreSavedThisRound = false;
+let lastSavedEntry = null;     // dòng vừa lưu (để tô sáng trên bảng)
+
+// =====================================================================
+// CỬA HÀNG - danh sách mặt hàng. Bấm E để mở.
+// =====================================================================
+const SHOP_ITEMS = [
+  { id:"hp_small",   kind:"heal",     name:"Bình Máu Nhỏ",   desc:"Hồi 30 máu",          price:20 },
+  { id:"hp_big",     kind:"heal_full",name:"Bình Máu Lớn",   desc:"Hồi đầy máu",         price:50 },
+  { id:"max_hp",     kind:"max_hp",   name:"Tăng Máu Tối Đa",desc:"+20 máu tối đa",      price:120 },
+  { id:"extra_life", kind:"life",     name:"Mạng Sống Thêm", desc:"+1 mạng",             price:300 },
+  { id:"fruit_flame",  kind:"fruit", fruit:"flame",   name:"Trái Lửa",  desc:"32 dmg, bắn nhanh",    price:80  },
+  { id:"fruit_ice",    kind:"fruit", fruit:"ice",     name:"Trái Băng", desc:"22 dmg × 2 viên",      price:120 },
+  { id:"fruit_wind",   kind:"fruit", fruit:"wind",    name:"Trái Gió",  desc:"16 dmg × 3 viên quạt", price:150 },
+  { id:"fruit_dragon", kind:"fruit", fruit:"dragon",  name:"Trái Rồng", desc:"60 dmg cực mạnh",      price:220 },
+  { id:"fruit_thunder",kind:"fruit", fruit:"thunder", name:"Trái Sét",  desc:"85 dmg, sát thương cao",price:320 },
+  { id:"sword_bronze", kind:"sword", tier:1, name:"Kiếm Đồng", desc:"+20% sát thương",  price:150 },
+  { id:"sword_silver", kind:"sword", tier:2, name:"Kiếm Bạc",  desc:"+50% sát thương",  price:380 },
+  { id:"sword_gold",   kind:"sword", tier:3, name:"Kiếm Vàng", desc:"+100% sát thương", price:800 }
+];
+
+// Bố cục lưới cửa hàng (lưu rect mỗi mục để bắt click)
+const SHOP_LAYOUT = {
+  panelX: 60, panelY: 60, panelW: 1160, panelH: 600,
+  cardW: 360, cardH: 124, cols: 3, gap: 14,
+  startX: 80, startY: 160
+};
+function shopCardRect(idx) {
+  const L = SHOP_LAYOUT;
+  const col = idx % L.cols, row = Math.floor(idx / L.cols);
+  return {
+    x: L.startX + col * (L.cardW + L.gap),
+    y: L.startY + row * (L.cardH + L.gap),
+    w: L.cardW, h: L.cardH
+  };
+}
+
+// Mua một mặt hàng
+function buyShopItem(item) {
+  // Đã sở hữu trái này -> bấm là đổi miễn phí (không tốn vàng)
+  if (item.kind === "fruit" && player.inventory.includes(item.fruit)) {
+    if (player.power === item.fruit) {
+      showNotice("Bạn đang dùng " + item.name + " rồi!", 90);
+      return;
+    }
+    player.power = item.fruit;
+    showNotice("Đã đổi sang " + item.name + " (miễn phí)!", 120);
+    sfxCoin();
+    return;
+  }
+  if (player.gold < item.price) {
+    showNotice("Không đủ vàng để mua " + item.name + "!", 90);
+    sfxHurt();
+    return;
+  }
+  if (item.kind === "sword" && player.swordTier >= item.tier) {
+    showNotice("Bạn đã có kiếm bằng hoặc tốt hơn rồi!", 90);
+    sfxHurt();
+    return;
+  }
+  player.gold -= item.price;
+  if (item.kind === "heal")       player.hp = Math.min(player.maxHp, player.hp + 30);
+  else if (item.kind === "heal_full") player.hp = player.maxHp;
+  else if (item.kind === "max_hp") { player.maxHp += 20; player.hp += 20; }
+  else if (item.kind === "life")   player.lives += 1;
+  else if (item.kind === "fruit") {
+    player.acquireFruit(item.fruit);
+    showNotice("Đã mua " + item.name + "! Bấm 1-6 để đổi qua lại.", 180);
+  }
+  else if (item.kind === "sword") {
+    player.swordTier = item.tier;
+    showNotice("Bạn vừa nhận " + item.name + "!", 150);
+  }
+  sfxCoin();
+  spawnParticles(player.x + player.w/2, player.y + player.h/2, {
+    count: 18, color: "#fff5a0", speed: 4, size: 3, life: 30, shape: "star"
+  });
+}
+let gameState = STATE.TITLE;
+let currentIslandIdx = 0;
+let level = null;
+let player = null;
+let quests = [];
+let playerOrbs = [];   // đạn của người chơi
+let enemyOrbs = [];    // đạn của boss
+let questFlash = 0;    // hiệu ứng nhấp nháy khi nhận / hoàn thành nhiệm vụ
+let questNotice = "";  // chữ thông báo nhiệm vụ ở giữa màn hình
+let noticeTimer = 0;
+let mouseClickConsumed = false;
+
+function startGame() {
+  ensureAudio();              // tạo AudioContext sau khi user nhấn phím
+  currentIslandIdx = 0;
+  player = new Player(100, 400);
+  player.name = (typedName.trim() || "Hải Tặc").slice(0, 14);
+  scoreSavedThisRound = false;
+  lastSavedEntry = null;
+  loadIsland(0);
+  gameState = STATE.PLAYING;
+  startBGM();
+}
+
+function loadIsland(idx) {
+  level = buildIsland(idx);
+  quests = makeQuestState(idx);
+  player.x = level.spawnX;
+  player.y = level.spawnY;
+  player.vx = 0; player.vy = 0;
+  player.hp = player.maxHp;
+  playerOrbs.length = 0;
+  enemyOrbs.length = 0;
+  particles.length = 0;
+  showNotice("Chào mừng đến " + level.name + "! Đến gặp người dân (chấm than vàng) để nhận nhiệm vụ.");
+}
+
+function showNotice(msg, time = 240) {
+  questNotice = msg;
+  noticeTimer = time;
+}
+
+// ===========================================================================
+// 17) VÒNG LẶP CHÍNH -------------------------------------------------------
+// ===========================================================================
+function update() {
+  if (gameState === STATE.PLAYING) {
+    player.update(input, level);
+
+    // Nhân vật chính bắn đạn ma thuật khi click chuột
+    if (input.mouseDown && !mouseClickConsumed && player.attackCooldown <= 0) {
+      const tx = input.mouseX + camera.x;
+      const ty = input.mouseY + camera.y;
+      const cfg = POWERS[player.power] || POWERS.default;
+      const ox = player.x + player.w/2 - cfg.size/2;
+      const oy = player.y + player.h/2 - cfg.size/2;
+      let dx = tx - (player.x + player.w/2);
+      let dy = ty - (player.y + player.h/2);
+      const baseAng = Math.atan2(dy, dx);
+      // Bắn count đạn lệch theo spread
+      const n = cfg.count || 1;
+      const swordMul = player.swordMultiplier();
+      for (let i = 0; i < n; i++) {
+        const offset = (n === 1) ? 0 : ((i - (n - 1) / 2) * cfg.spread);
+        const a = baseAng + offset;
+        const orb = new MagicOrb(
+          ox, oy,
+          Math.cos(a), Math.sin(a),
+          "player", cfg
+        );
+        orb.dmg = cfg.dmg * swordMul;     // kiếm tăng sát thương
+        playerOrbs.push(orb);
+      }
+      player.attackCooldown = cfg.cd;
+      sfxShoot();
+      // hiệu ứng phép thuật quanh người
+      spawnParticles(player.x + player.w/2, player.y + player.h/2, {
+        count: 8, color: cfg.glow, speed: 3, size: 3, life: 18, gravity: 0
+      });
+      mouseClickConsumed = true;
+    }
+    if (!input.mouseDown) mouseClickConsumed = false;
+
+    // Cập nhật kẻ thù
+    for (const e of level.enemies) e.update(level, player);
+    // Vật phẩm
+    const beforeCoins  = level.items.filter(i => i.kind === "coin"  && i.alive).length;
+    const beforeFruits = level.items.filter(i => i.kind === "fruit" && i.alive).length;
+    for (const it of level.items) it.update(player);
+    const afterCoins   = level.items.filter(i => i.kind === "coin"  && i.alive).length;
+    const afterFruits  = level.items.filter(i => i.kind === "fruit" && i.alive).length;
+    for (let k = 0; k < beforeCoins  - afterCoins;  k++) updateQuests(quests, "collect_coin");
+    for (let k = 0; k < beforeFruits - afterFruits; k++) updateQuests(quests, "collect_fruit");
+
+    // NPC
+    for (const n of level.npcs) n.update();
+    // Thuyền
+    for (const b of level.boats) b.update();
+
+    // Đạn của người chơi
+    for (let i = playerOrbs.length - 1; i >= 0; i--) {
+      const o = playerOrbs[i];
+      o.update();
+      let hit = false;
+      for (const e of level.enemies) {
+        if (e.alive && rectsHit(o, e)) {
+          e.takeDamage(o.dmg);
+          if (e.alive) sfxHitEnemy();   // còn sống -> tiếng "trúng đòn"; chết thì sfxKillEnemy ở vòng quét sau
+          hit = true;
+          break;
+        }
+      }
+      if (hit || o.life <= 0) playerOrbs.splice(i, 1);
+    }
+
+    // Quét tất cả kẻ thù: nếu vừa chết (do đạn hoặc rơi biển) mà chưa thưởng -> thưởng và đếm nhiệm vụ
+    for (const e of level.enemies) {
+      if (!e.alive && !e.rewarded) {
+        e.rewarded = true;
+        player.score += e.scoreReward;
+        player.gold  += e.goldReward;
+        sfxKillEnemy();
+        if (e.kind === "guard")      updateQuests(quests, "kill_guard");
+        else if (e.kind === "beast") updateQuests(quests, "kill_beast");
+        else if (e.kind === "boss")  updateQuests(quests, "kill_boss");
+      }
+    }
+
+    // Đạn của boss
+    for (let i = enemyOrbs.length - 1; i >= 0; i--) {
+      const o = enemyOrbs[i];
+      o.update();
+      if (rectsHit(o, player)) {
+        player.takeDamage(o.dmg);
+        enemyOrbs.splice(i, 1);
+        continue;
+      }
+      if (o.life <= 0) enemyOrbs.splice(i, 1);
+    }
+
+    // Mở bảng nhiệm vụ khi gần NPC và bấm Enter
+    for (const n of level.npcs) {
+      if (n.inRange(player) && input.enter) {
+        gameState = STATE.QUEST;
+        input.enter = false;
+        break;
+      }
+    }
+
+    // Bấm E để mở cửa hàng (mua bằng vàng)
+    if (input.shopKey) {
+      gameState = STATE.SHOP;
+      input.shopKey = false;
+      mouseClickConsumed = true;   // tránh bắn tiếp khi mở shop
+    }
+
+    // Đến thuyền và đã hoàn thành tất cả nhiệm vụ -> qua đảo mới
+    for (const b of level.boats) {
+      if (b.inRange(player) && allQuestsDone(quests)) {
+        if (currentIslandIdx === ISLAND_CONFIGS.length - 1) {
+          gameState = STATE.WIN;
+          stopBGM();
+          sfxWin();
+          commitScore(true);
+        } else {
+          currentIslandIdx++;
+          loadIsland(currentIslandIdx);
+          player.score += 1000;
+          sfxWin();
+        }
+        break;
+      } else if (b.inRange(player) && !allQuestsDone(quests)) {
+        showNotice("Hãy hoàn thành tất cả nhiệm vụ trước khi lên thuyền!", 90);
+      }
+    }
+
+    // Thua game
+    if (player.dead) {
+      gameState = STATE.GAMEOVER;
+      stopBGM();
+      sfxGameOver();
+      commitScore(false);
+    }
+
+    updateParticles();
+    updateCamera(player, level);
+
+    if (noticeTimer > 0) noticeTimer--;
+  } else if (gameState === STATE.QUEST) {
+    if (input.enter || input.esc) {
+      gameState = STATE.PLAYING;
+      input.enter = false;
+      input.esc = false;
+    }
+  } else if (gameState === STATE.SHOP) {
+    // Đóng cửa hàng bằng E hoặc ESC
+    if (input.shopKey || input.esc) {
+      gameState = STATE.PLAYING;
+      input.shopKey = false;
+      input.esc = false;
+      mouseClickConsumed = true;
+    }
+    // Bắt click chuột vào card để mua
+    if (input.mouseDown && !mouseClickConsumed) {
+      mouseClickConsumed = true;
+      for (let i = 0; i < SHOP_ITEMS.length; i++) {
+        const r = shopCardRect(i);
+        if (input.mouseX >= r.x && input.mouseX <= r.x + r.w &&
+            input.mouseY >= r.y && input.mouseY <= r.y + r.h) {
+          buyShopItem(SHOP_ITEMS[i]);
+          break;
+        }
+      }
+    }
+    if (!input.mouseDown) mouseClickConsumed = false;
+    // vẫn cập nhật hạt + thông báo cho không bị đứng hình
+    updateParticles();
+    if (noticeTimer > 0) noticeTimer--;
+  } else if (gameState === STATE.TITLE) {
+    if (input.enter) {
+      input.enter = false;
+      // Bắt đầu nhập tên
+      ensureAudio();
+      typedName = (player && player.name && player.name !== "Hải Tặc") ? player.name : "";
+      gameState = STATE.NAME_INPUT;
+    }
+  } else if (gameState === STATE.NAME_INPUT) {
+    if (input.esc) {
+      input.esc = false;
+      gameState = STATE.TITLE;
+    }
+    if (input.enter) {
+      input.enter = false;
+      if (typedName.trim().length === 0) {
+        showNotice("Vui lòng nhập tên hải tặc của bạn!", 90);
+      } else {
+        startGame();
+      }
+    }
+    if (noticeTimer > 0) noticeTimer--;
+  } else if (gameState === STATE.GAMEOVER || gameState === STATE.WIN) {
+    if (input.enter) {
+      input.enter = false;
+      gameState = STATE.TITLE;
+    }
+  }
+}
+
+// Lưu điểm hiện tại của người chơi vào bảng xếp hạng (chỉ 1 lần / lượt)
+function commitScore(won) {
+  if (scoreSavedThisRound) return;
+  scoreSavedThisRound = true;
+  const islandsCleared = won ? ISLAND_CONFIGS.length : currentIslandIdx;
+  const result = addScoreToLeaderboard(player.name, player.score, islandsCleared, won);
+  lastSavedEntry = result.entry;
+}
+
+// ===========================================================================
+// 18) HÀM VẼ ---------------------------------------------------------------
+// ===========================================================================
+function draw() {
+  // xoá nền
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, W, H);
+
+  if (gameState === STATE.TITLE) {
+    drawTitleScreen();
+    return;
+  }
+  if (gameState === STATE.NAME_INPUT) {
+    drawNameInput();
+    return;
+  }
+
+  // === Đang chơi / mở bảng nhiệm vụ (vẽ thế giới phía sau) ===
+  drawBackground(level, camera.x);
+  drawDecorations(level, camera.x, camera.y);
+  drawPlatforms(level, camera.x, camera.y);
+
+  // Thuyền cuối đảo
+  for (const b of level.boats) b.draw(camera.x, camera.y);
+  // NPC
+  for (const n of level.npcs) n.draw(camera.x, camera.y);
+  // Vật phẩm
+  for (const it of level.items) it.draw(camera.x, camera.y);
+  // Kẻ thù
+  for (const e of level.enemies) e.draw(camera.x, camera.y);
+  // Đạn của người chơi
+  for (const o of playerOrbs) o.draw(camera.x, camera.y);
+  // Đạn của boss
+  for (const o of enemyOrbs)  o.draw(camera.x, camera.y);
+  // Người chơi
+  player.draw(camera.x, camera.y);
+  // Hạt
+  drawParticles(camera.x, camera.y);
+
+  // Vẽ ngắm chuột
+  drawCrosshair();
+
+  // Vẽ UI
+  drawPowerBar();
+  drawHUD();
+
+  // Thông báo gần NPC
+  for (const n of level.npcs) {
+    if (n.inRange(player)) {
+      const tx = n.x - camera.x + n.w/2;
+      const ty = n.y - camera.y - 40;
+      drawText("[Enter] Nhận nhiệm vụ", tx, ty, 18, "#fff", "#000", "center");
+    }
+  }
+  // Thông báo gần thuyền
+  for (const b of level.boats) {
+    if (b.inRange(player)) {
+      const tx = b.x - camera.x + b.w/2;
+      const ty = b.y - camera.y - 60;
+      if (allQuestsDone(quests)) {
+        drawText("Lên thuyền sang đảo mới!", tx, ty, 18, "#7afc6e", "#000", "center");
+      } else {
+        drawText("Cần hoàn thành nhiệm vụ", tx, ty, 18, "#ffd24a", "#000", "center");
+      }
+    }
+  }
+
+  // Thông báo lớn giữa màn hình - đặt dưới boss bar và rộng theo nội dung
+  if (noticeTimer > 0 && questNotice) {
+    ctx.globalAlpha = Math.min(1, noticeTimer / 30);
+    let ns = 22;
+    ctx.font = `bold ${ns}px sans-serif`;
+    let tw = ctx.measureText(questNotice).width;
+    // nếu quá rộng, giảm cỡ chữ
+    while (tw > W - 120 && ns > 14) {
+      ns--;
+      ctx.font = `bold ${ns}px sans-serif`;
+      tw = ctx.measureText(questNotice).width;
+    }
+    const padX = 30, padY = 18;
+    const boxW = Math.min(W - 60, tw + padX * 2);
+    const boxH = ns + padY * 2;
+    const noticeY = 380;
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.fillRect(W/2 - boxW/2, noticeY, boxW, boxH);
+    drawText(questNotice, W/2, noticeY + padY, ns, "#fff", "#000", "center");
+    ctx.globalAlpha = 1;
+  }
+
+  if (gameState === STATE.QUEST)    drawQuestPanel();
+  if (gameState === STATE.SHOP)     drawShop();
+  if (gameState === STATE.GAMEOVER) drawGameOver();
+  if (gameState === STATE.WIN)      drawWin();
+}
+
+// =====================================================================
+// Vẽ icon trong cửa hàng tuỳ theo loại mặt hàng
+// =====================================================================
+function drawShopIcon(item, cx, cy) {
+  if (item.kind === "heal" || item.kind === "heal_full") {
+    // bình thuốc đỏ
+    ctx.fillStyle = "#5a2a06";
+    ctx.fillRect(cx - 8, cy - 18, 16, 6);          // nắp
+    ctx.fillStyle = "#7a3a06";
+    ctx.fillRect(cx - 4, cy - 22, 8, 6);
+    ctx.fillStyle = item.kind === "heal_full" ? "#ff1a1a" : "#ff6a6a";
+    ctx.fillRect(cx - 12, cy - 12, 24, 28);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(cx - 8, cy - 8, 4, 6);            // điểm sáng
+    drawText("+", cx, cy + 2, 16, "#fff", "#000", "center");
+  } else if (item.kind === "max_hp") {
+    // trái tim lớn
+    ctx.fillStyle = "#ff4a6a";
+    ctx.beginPath();
+    ctx.arc(cx - 6, cy - 4, 9, 0, Math.PI * 2);
+    ctx.arc(cx + 6, cy - 4, 9, 0, Math.PI * 2);
+    ctx.moveTo(cx - 14, cy);
+    ctx.lineTo(cx, cy + 18);
+    ctx.lineTo(cx + 14, cy);
+    ctx.fill();
+    drawText("+", cx, cy - 8, 14, "#fff", "#000", "center");
+  } else if (item.kind === "life") {
+    // chữ 1UP kiểu game
+    ctx.fillStyle = "#7afc6e";
+    ctx.fillRect(cx - 22, cy - 14, 44, 28);
+    drawText("1UP", cx, cy - 8, 16, "#fff", "#000", "center");
+  } else if (item.kind === "fruit") {
+    const cfg = POWERS[item.fruit];
+    // dùng màu của power
+    ctx.fillStyle = "#3a8a2a";
+    ctx.fillRect(cx - 2, cy - 24, 4, 8);           // cuống
+    ctx.fillStyle = cfg.glow;
+    ctx.beginPath(); ctx.arc(cx, cy, 18, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = cfg.color;
+    ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(cx - 6, cy - 8, 4, 4);
+  } else if (item.kind === "sword") {
+    // kiếm với màu khác nhau theo cấp
+    const colors = [null,
+      ["#cc7a1a", "#8a4a06"],   // đồng
+      ["#dde0e6", "#9aa0aa"],   // bạc
+      ["#ffd24a", "#a87a14"]];  // vàng
+    const [c1, c2] = colors[item.tier];
+    // chuôi
+    ctx.fillStyle = "#3a1a06"; ctx.fillRect(cx - 3, cy + 6, 6, 14);
+    ctx.fillStyle = c2;        ctx.fillRect(cx - 12, cy + 4, 24, 4);
+    // lưỡi kiếm
+    ctx.fillStyle = c1;        ctx.fillRect(cx - 2, cy - 22, 4, 28);
+    ctx.fillStyle = "#fff";    ctx.fillRect(cx - 1, cy - 22, 1, 22);
+    ctx.fillStyle = c2;        ctx.fillRect(cx - 2, cy - 24, 4, 4);
+  }
+}
+
+// =====================================================================
+// Vẽ cửa hàng (mở khi bấm E)
+// =====================================================================
+function drawShop() {
+  // nền mờ
+  ctx.fillStyle = "rgba(0,0,0,0.75)";
+  ctx.fillRect(0, 0, W, H);
+
+  const L = SHOP_LAYOUT;
+  // panel chính
+  ctx.fillStyle = "#1c2750";
+  ctx.fillRect(L.panelX, L.panelY, L.panelW, L.panelH);
+  ctx.strokeStyle = "#ffd24a"; ctx.lineWidth = 4;
+  ctx.strokeRect(L.panelX, L.panelY, L.panelW, L.panelH);
+
+  // tiêu đề
+  drawText("CỬA HÀNG HẢI TẶC",
+    L.panelX + L.panelW/2, L.panelY + 16, 32, "#ffd24a", "#000", "center");
+  drawText("Vàng của bạn: " + player.gold,
+    L.panelX + 30, L.panelY + 70, 22, "#fff5a0", "#000", "left");
+  drawText("Bấm E hoặc ESC để đóng",
+    L.panelX + L.panelW - 30, L.panelY + 70, 18, "#aef", "#000", "right");
+
+  // các thẻ hàng
+  for (let i = 0; i < SHOP_ITEMS.length; i++) {
+    const it = SHOP_ITEMS[i];
+    const r  = shopCardRect(i);
+
+    const enough     = player.gold >= it.price;
+    const ownedFruit = it.kind === "fruit" && player.inventory.includes(it.fruit);
+    const activeFruit= it.kind === "fruit" && player.power === it.fruit;
+    const ownedSword = it.kind === "sword" && player.swordTier >= it.tier;
+
+    // hover (chuột nằm trong)
+    const hover = (input.mouseX >= r.x && input.mouseX <= r.x + r.w &&
+                   input.mouseY >= r.y && input.mouseY <= r.y + r.h);
+
+    // nền card
+    let bgCol = "#202c54";
+    let edgeCol = enough ? "#ffd24a" : "#666";
+    if (activeFruit) { bgCol = "#2a3a2a"; edgeCol = "#7afc6e"; }
+    else if (ownedFruit) { bgCol = "#264052"; edgeCol = "#7ad4ff"; }
+    else if (ownedSword) { bgCol = "#2a3a2a"; edgeCol = "#7afc6e"; }
+    if (hover && !activeFruit) bgCol = (ownedFruit ? "#365a72" : "#2c3a72");
+
+    ctx.fillStyle = bgCol;
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = edgeCol;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+    // icon
+    drawShopIcon(it, r.x + 50, r.y + r.h/2);
+
+    // tên + mô tả (tự co cỡ chữ nếu quá dài để khỏi tràn ra ngoài thẻ)
+    const textMaxW = r.w - 120;          // chừa chỗ cho icon trái + giá phải
+    let nameSize = 20;
+    ctx.font = `bold ${nameSize}px sans-serif`;
+    while (ctx.measureText(it.name).width > textMaxW && nameSize > 14) {
+      nameSize--;
+      ctx.font = `bold ${nameSize}px sans-serif`;
+    }
+    drawText(it.name, r.x + 100, r.y + 12, nameSize, "#ffd24a", "#000");
+    let descSize = 13;
+    ctx.font = `bold ${descSize}px sans-serif`;
+    let desc = it.desc;
+    while (ctx.measureText(desc).width > textMaxW && desc.length > 6) {
+      desc = desc.slice(0, -1);
+    }
+    if (desc !== it.desc) desc = desc.slice(0, -1) + "…";
+    drawText(desc, r.x + 100, r.y + 40, descSize, "#fff", "#000");
+
+    // dòng trạng thái + giá
+    if (activeFruit) {
+      drawText("ĐANG DÙNG", r.x + r.w - 14, r.y + r.h - 32, 18, "#7afc6e", "#000", "right");
+    } else if (ownedFruit) {
+      drawText("Bấm để đổi (miễn phí)", r.x + 100, r.y + r.h - 26, 13, "#7ad4ff", "#000");
+      drawText("ĐÃ CÓ", r.x + r.w - 14, r.y + r.h - 32, 16, "#7ad4ff", "#000", "right");
+    } else if (ownedSword) {
+      drawText("ĐÃ CÓ", r.x + r.w - 14, r.y + r.h - 32, 18, "#7afc6e", "#000", "right");
+    } else {
+      const priceCol = enough ? "#fff5a0" : "#ff6a6a";
+      drawText(it.price + " 💰", r.x + r.w - 14, r.y + r.h - 32, 20, priceCol, "#000", "right");
+      drawText(enough ? "[Bấm để mua]" : "[Thiếu vàng]",
+               r.x + 100, r.y + r.h - 26, 13, enough ? "#7afc6e" : "#ff6a6a", "#000");
+    }
+  }
+
+  // thông báo nổi (nếu có)
+  if (noticeTimer > 0 && questNotice) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(W/2 - 360, L.panelY + L.panelH - 56, 720, 44);
+    drawText(questNotice, W/2, L.panelY + L.panelH - 48, 20, "#fff", "#000", "center");
+  }
+}
+
+function drawCrosshair() {
+  const x = input.mouseX, y = input.mouseY;
+  ctx.strokeStyle = "rgba(255,255,255,0.8)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x, y, 14, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x - 18, y); ctx.lineTo(x - 6, y);
+  ctx.moveTo(x + 6, y);  ctx.lineTo(x + 18, y);
+  ctx.moveTo(x, y - 18); ctx.lineTo(x, y - 6);
+  ctx.moveTo(x, y + 6);  ctx.lineTo(x, y + 18);
+  ctx.stroke();
+}
+
+// =====================================================================
+// Thanh sức mạnh ở giữa trên cùng - 6 ô tương ứng phím 1..6
+// Ô đang dùng tô vàng, ô đã sở hữu tô bình thường, ô chưa có thì xám/khoá
+// =====================================================================
+function drawPowerBar() {
+  const slots = POWER_ORDER;        // 6 mặt
+  const sw = 70, sh = 64, pad = 6;
+  const total = slots.length * sw + (slots.length - 1) * pad;
+  const startX = (W - total) / 2;   // ở giữa, nằm khoảng x=395..885
+  const y = 14;
+
+  for (let i = 0; i < slots.length; i++) {
+    const power  = slots[i];
+    const cfg    = POWERS[power];
+    const owned  = player.inventory.includes(power);
+    const active = player.power === power;
+    const x = startX + i * (sw + pad);
+
+    ctx.fillStyle = active ? "rgba(255,210,74,0.30)" :
+                    owned  ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.40)";
+    ctx.fillRect(x, y, sw, sh);
+    ctx.strokeStyle = active ? "#ffd24a" : (owned ? "#fff" : "#666");
+    ctx.lineWidth   = active ? 3 : 2;
+    ctx.strokeRect(x, y, sw, sh);
+
+    drawText("[" + (i + 1) + "]",
+             x + sw/2, y + 4, 12, owned ? "#ffd24a" : "#888", "#000", "center");
+
+    if (owned) {
+      // icon vòng tròn theo màu power
+      ctx.fillStyle = cfg.glow;
+      ctx.beginPath(); ctx.arc(x + sw/2, y + 30, 14, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = cfg.color;
+      ctx.beginPath(); ctx.arc(x + sw/2, y + 30, 10, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(x + sw/2 - 4, y + 26, 3, 3);
+    } else {
+      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      ctx.fillRect(x + sw/2 - 8, y + 22, 16, 16);
+      drawText("?", x + sw/2, y + 22, 18, "#666", "#000", "center");
+    }
+
+    // tên nhỏ ở đáy ô (cắt gọn)
+    let name = cfg.name;
+    ctx.font = "bold 11px sans-serif";
+    while (ctx.measureText(name).width > sw - 6 && name.length > 4) {
+      name = name.slice(0, -1);
+    }
+    drawText(name, x + sw/2, y + sh - 14, 11,
+             owned ? (active ? "#ffd24a" : "#fff") : "#666", "#000", "center");
+  }
+
+  // gợi ý phím nhỏ
+  drawText("1-6 hoặc Q : đổi sức mạnh",
+           W/2, y + sh + 4, 12, "#aef", "#000", "center");
+}
+
+// HUD (góc trên bên phải): điểm, máu, mạng, vàng, sức mạnh, đảo, nhiệm vụ
+function drawHUD() {
+  // Bảng ở góc trên bên phải - rộng và cao hơn để đủ chỗ
+  const panelX = W - 360, panelY = 20, panelW = 340, panelH = 350;
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(panelX, panelY, panelW, panelH);
+  ctx.strokeStyle = "#ffd24a";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+  // Tên đảo - co chữ lại nếu quá dài
+  let nameSize = 20;
+  ctx.font = `bold ${nameSize}px sans-serif`;
+  while (ctx.measureText(level.name).width > panelW - 24 && nameSize > 14) {
+    nameSize--;
+    ctx.font = `bold ${nameSize}px sans-serif`;
+  }
+  drawText(level.name, panelX + panelW/2, panelY + 10, nameSize, "#ffe06a", "#000", "center");
+  // Tên người chơi - hiển thị nhỏ ở góc trên bên trái màn hình
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(20, 20, 220, 32);
+  drawText("👤 " + player.name, 30, 28, 18, "#aef", "#000");
+
+  // Máu
+  const hpRatio = clamp(player.hp / player.maxHp, 0, 1);
+  drawText("Máu", panelX + 14, panelY + 44, 16, "#fff");
+  const barX = panelX + 60, barW = panelW - 76;
+  ctx.fillStyle = "#3a0000";
+  ctx.fillRect(barX, panelY + 44, barW, 18);
+  ctx.fillStyle = "#ff4040";
+  ctx.fillRect(barX, panelY + 44, barW * hpRatio, 18);
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+  ctx.strokeRect(barX, panelY + 44, barW, 18);
+  drawText(`${Math.max(0, Math.floor(player.hp))}/${player.maxHp}`,
+           barX + barW/2, panelY + 46, 14, "#fff", "#000", "center");
+
+  // Mạng (trái tim) - tối đa 5 ô
+  drawText("Mạng", panelX + 14, panelY + 76, 16, "#fff");
+  const livesShown = Math.max(3, player.lives);
+  for (let i = 0; i < livesShown; i++) {
+    const hx = panelX + 66 + i * 28, hy = panelY + 80;
+    if (i < player.lives) {
+      ctx.fillStyle = "#ff4a6a";
+      ctx.beginPath();
+      ctx.arc(hx + 4,  hy + 4, 6, 0, Math.PI * 2);
+      ctx.arc(hx + 14, hy + 4, 6, 0, Math.PI * 2);
+      ctx.moveTo(hx, hy + 6);
+      ctx.lineTo(hx + 9, hy + 18);
+      ctx.lineTo(hx + 18, hy + 6);
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = "#888"; ctx.lineWidth = 2;
+      ctx.strokeRect(hx, hy, 18, 18);
+    }
+  }
+
+  // Điểm
+  drawText("Điểm: " + player.score, panelX + 14, panelY + 110, 17, "#ffd24a", "#000");
+  // Vàng
+  drawText("Vàng: " + player.gold,  panelX + 14, panelY + 132, 17, "#fff5a0", "#000");
+
+  // Sức mạnh hiện tại - hiển thị icon vòng tròn + tên
+  const pcfg = POWERS[player.power] || POWERS.default;
+  drawText("Sức mạnh:", panelX + 14, panelY + 156, 15, "#aef", "#000");
+  // icon
+  const icx = panelX + 110, icy = panelY + 165;
+  ctx.fillStyle = pcfg.glow;
+  ctx.beginPath(); ctx.arc(icx, icy, 9, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = pcfg.color;
+  ctx.beginPath(); ctx.arc(icx, icy, 6, 0, Math.PI * 2); ctx.fill();
+  drawText(pcfg.name, panelX + 124, panelY + 156, 15, pcfg.color, "#000");
+
+  // Kiếm hiện tại
+  const swordNames = ["(chưa có)", "Kiếm Đồng", "Kiếm Bạc", "Kiếm Vàng"];
+  const swordCols  = ["#888",       "#cc7a1a",   "#dde0e6",  "#ffd24a"];
+  drawText("Kiếm:",
+           panelX + 14, panelY + 182, 15, "#aef", "#000");
+  drawText(swordNames[player.swordTier] +
+           (player.swordTier > 0 ? `  (×${player.swordMultiplier()})` : ""),
+           panelX + 64, panelY + 182, 15, swordCols[player.swordTier], "#000");
+
+  // Tiến độ nhiệm vụ
+  let qy = panelY + 214;
+  drawText("Nhiệm vụ:", panelX + 14, qy, 14, "#aef", "#000");
+  qy += 20;
+  for (const q of quests) {
+    const sym = q.done ? "✓" : "•";
+    const col = q.done ? "#7afc6e" : "#fff";
+    // chỉ hiển thị tóm tắt + tiến độ để khỏi tràn
+    let label = q.text;
+    // co chữ tự động cho khớp panel
+    let s = 13;
+    ctx.font = `bold ${s}px sans-serif`;
+    const maxW = panelW - 80;
+    while (ctx.measureText(label).width > maxW && label.length > 6) {
+      label = label.slice(0, -1);
+    }
+    if (label !== q.text) label = label.slice(0, -1) + "…";
+    drawText(`${sym} ${label}`, panelX + 14, qy, s, col, "#000");
+    drawText(`${q.progress}/${q.target}`,
+             panelX + panelW - 14, qy, s, col, "#000", "right");
+    qy += 18;
+  }
+
+  // Bảng máu boss (đặt phía dưới Power Bar để không đè lên nhau)
+  if (level.boss && level.boss.alive && level.boss.aggro) {
+    const bx = W/2 - 260, by = 110;
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.fillRect(bx, by, 520, 42);
+    drawText("BOSS: " + level.config.bossName, W/2, by + 4, 18, "#ff8a8a", "#000", "center");
+    const r = clamp(level.boss.hp / level.boss.maxHp, 0, 1);
+    ctx.fillStyle = "#3a0000"; ctx.fillRect(bx + 10, by + 24, 500, 14);
+    ctx.fillStyle = "#ff3838"; ctx.fillRect(bx + 10, by + 24, 500 * r, 14);
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+    ctx.strokeRect(bx + 10, by + 24, 500, 14);
+  }
+
+  // Hướng dẫn ở góc dưới
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(20, H - 110, 400, 90);
+  drawText("← → : Đi   ↑ / Cách : Nhảy",          30, H - 104, 16, "#fff");
+  drawText("Chuột trái: Phép Khống Chế Từ Xa",    30, H -  84, 16, "#cba9ff");
+  drawText("Enter: Bảng nhiệm vụ (gần NPC)",      30, H -  64, 16, "#ffd24a");
+  drawText("E: Mở/đóng Cửa Hàng (mua bằng vàng)", 30, H -  44, 16, "#fff5a0");
+}
+
+// Bảng nhiệm vụ chi tiết
+function drawQuestPanel() {
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.fillRect(0, 0, W, H);
+
+  const px = W/2 - 360, py = 100, pw = 720, ph = 480;
+  ctx.fillStyle = "#1c2750";
+  ctx.fillRect(px, py, pw, ph);
+  ctx.strokeStyle = "#ffd24a"; ctx.lineWidth = 4;
+  ctx.strokeRect(px, py, pw, ph);
+
+  drawText("BẢNG NHIỆM VỤ - " + level.name,
+           px + pw/2, py + 20, 28, "#ffd24a", "#000", "center");
+
+  drawText("Người dân: \"Chào hải tặc nhỏ! Hòn đảo của chúng tôi đang bị tấn công.",
+           px + 30, py + 70, 16, "#fff");
+  drawText("Bạn có thể giúp chúng tôi hoàn thành các nhiệm vụ sau không?\"",
+           px + 30, py + 92, 16, "#fff");
+
+  let qy = py + 140;
+  for (let i = 0; i < quests.length; i++) {
+    const q = quests[i];
+    const col = q.done ? "#7afc6e" : "#fff";
+    const sym = q.done ? "[ĐÃ XONG ✓]" : `[${q.progress}/${q.target}]`;
+    drawText(`${i + 1}. ${q.text}`, px + 40, qy, 20, col, "#000");
+    drawText(sym, px + pw - 40, qy, 20, col, "#000", "right");
+    qy += 40;
+  }
+
+  drawText("Mẹo:", px + 30, qy + 20, 18, "#aef", "#000");
+  drawText("• Dùng Chuột Trái để bắn đạn ma thuật từ xa.", px + 30, qy + 46, 16, "#fff");
+  drawText("• Nhảy lên bục cao để tránh kẻ thù và tìm vàng.", px + 30, qy + 68, 16, "#fff");
+  drawText("• Hoàn thành tất cả nhiệm vụ rồi lên thuyền sang đảo mới!", px + 30, qy + 90, 16, "#fff");
+
+  drawText("Bấm Enter hoặc ESC để tiếp tục",
+           px + pw/2, py + ph - 40, 18, "#ffd24a", "#000", "center");
+}
+
+// Màn hình tiêu đề
+// Vẽ nền sao + sóng dùng chung cho title / nhập tên / kết thúc
+function drawSpaceBackground() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "#1c2a8a");
+  g.addColorStop(1, "#0a4a7a");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 80; i++) {
+    const x = (i * 137) % W;
+    const y = (i * 59) % (H/2);
+    ctx.fillStyle = "rgba(255,255,255," + (0.5 + 0.5 * Math.sin(Date.now()/400 + i)) + ")";
+    ctx.fillRect(x, y, 2, 2);
+  }
+  ctx.fillStyle = "#0a4a7a";
+  ctx.fillRect(0, H - 200, W, 200);
+  ctx.fillStyle = "rgba(255,255,255,0.15)";
+  for (let i = 0; i < 30; i++) {
+    ctx.fillRect((i * 50 + Math.floor(Date.now()/30) % 50), H - 180 + (i % 3) * 14, 26, 4);
+  }
+}
+
+// =====================================================================
+// Vẽ bảng xếp hạng (top 10). Nếu highlight = entry vừa ghi -> tô vàng
+// =====================================================================
+function drawLeaderboardPanel(x, y, w, h, highlight) {
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = "#ffd24a"; ctx.lineWidth = 3;
+  ctx.strokeRect(x, y, w, h);
+
+  drawText("🏆 BẢNG XẾP HẠNG 🏆",
+    x + w/2, y + 12, 24, "#ffd24a", "#000", "center");
+
+  const list = loadLeaderboard();
+  if (list.length === 0) {
+    drawText("Chưa có ai chơi.",
+      x + w/2, y + h/2 - 16, 22, "#ccc", "#000", "center");
+    drawText("Hãy là hải tặc đầu tiên!",
+      x + w/2, y + h/2 + 12, 18, "#aef", "#000", "center");
+    return;
+  }
+  // hàng tiêu đề cột
+  let ry = y + 56;
+  drawText("#",     x + 24,        ry, 14, "#aef", "#000");
+  drawText("Tên",   x + 60,        ry, 14, "#aef", "#000");
+  drawText("Điểm",  x + w - 200,   ry, 14, "#aef", "#000");
+  drawText("Đảo",   x + w - 110,   ry, 14, "#aef", "#000");
+  drawText("Ngày",  x + w - 60,    ry, 14, "#aef", "#000");
+  ry += 24;
+  // các dòng
+  const maxRows = Math.min(10, list.length);
+  for (let i = 0; i < maxRows; i++) {
+    const e = list[i];
+    const isMe = highlight &&
+                 highlight.name === e.name &&
+                 highlight.score === e.score &&
+                 highlight.date === e.date;
+    if (isMe) {
+      ctx.fillStyle = "rgba(255, 210, 74, 0.22)";
+      ctx.fillRect(x + 8, ry - 3, w - 16, 24);
+    }
+    const col = isMe ? "#ffd24a" : (e.won ? "#7afc6e" : "#fff");
+    drawText(`${i + 1}.`,        x + 24,      ry, 16, col, "#000");
+    drawText(e.name,             x + 60,      ry, 16, col, "#000");
+    drawText("" + e.score,       x + w - 200, ry, 16, col, "#000");
+    drawText(e.won ? `${e.islands}⭐` : `${e.islands}`,
+                                 x + w - 110, ry, 14, col, "#000");
+    drawText(e.date,             x + w - 60,  ry, 12, col, "#000");
+    ry += 22;
+  }
+}
+
+// =====================================================================
+// Màn hình tiêu đề - 2 cột: hướng dẫn + bảng xếp hạng
+// =====================================================================
+function drawTitleScreen() {
+  drawSpaceBackground();
+
+  // tiêu đề
+  drawText("ISLAND PIRATES", W/2, 50,  72, "#ffd24a", "#3a1a06", "center");
+  drawText("HẢI TẶC ĐẢO",    W/2, 130, 32, "#fff",    "#3a1a06", "center");
+
+  // hộp hướng dẫn (trái)
+  const bx = 60, by = 200, bw = 560, bh = 380;
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.strokeStyle = "#ffd24a"; ctx.lineWidth = 3;
+  ctx.strokeRect(bx, by, bw, bh);
+
+  drawText("CÁCH CHƠI", bx + bw/2, by + 14, 26, "#ffd24a", "#000", "center");
+  drawText("← →  : Di chuyển trái / phải",         bx + 30, by + 60,  19, "#fff");
+  drawText("↑ hoặc Cách : Nhảy lên",               bx + 30, by + 90,  19, "#fff");
+  drawText("Chuột Trái : Bắn phép từ xa",          bx + 30, by + 120, 19, "#cba9ff");
+  drawText("Enter : Nói chuyện / Mở nhiệm vụ",     bx + 30, by + 150, 19, "#7afc6e");
+  drawText("E : Mở Cửa Hàng (mua bằng vàng)",      bx + 30, by + 180, 19, "#fff5a0");
+
+  drawText("Mục tiêu:",                            bx + 30, by + 222, 19, "#aef");
+  drawText("Khám phá 5 hòn đảo, đánh bại lính,",   bx + 30, by + 250, 17, "#fff");
+  drawText("thú rừng và Boss để chiến thắng!",     bx + 30, by + 274, 17, "#fff");
+  drawText("Vàng cao + thắng = top bảng xếp hạng", bx + 30, by + 312, 17, "#ffd24a");
+  drawText("(điểm thắng có dấu ⭐)",                bx + 30, by + 336, 16, "#7afc6e");
+
+  // bảng xếp hạng (phải)
+  drawLeaderboardPanel(660, 200, 560, 380, null);
+
+  // nút bắt đầu nhấp nháy
+  const blink = Math.floor(Date.now() / 500) % 2 === 0;
+  drawText("► Bấm ENTER để bắt đầu chơi ◄", W/2, H - 90, 30,
+           blink ? "#fff" : "#ffd24a", "#000", "center");
+  drawText("Thiết kế bởi: Lâm, 10 tuổi", W/2, H - 50, 16, "#aef", "#000", "center");
+}
+
+// =====================================================================
+// Màn hình nhập tên hải tặc
+// =====================================================================
+function drawNameInput() {
+  drawSpaceBackground();
+
+  drawText("NHẬP TÊN HẢI TẶC", W/2, 130, 56, "#ffd24a", "#000", "center");
+  drawText("Hãy đặt một cái tên thật ngầu!", W/2, 210, 22, "#fff", "#000", "center");
+
+  // ô nhập
+  const bx = W/2 - 320, by = 280, bw = 640, bh = 90;
+  ctx.fillStyle = "#1c2750";
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.strokeStyle = "#ffd24a"; ctx.lineWidth = 4;
+  ctx.strokeRect(bx, by, bw, bh);
+  // nội dung + con trỏ nhấp nháy
+  const cursor = (Math.floor(Date.now() / 400) % 2 === 0) ? "▌" : " ";
+  const display = typedName + cursor;
+  drawText(display, W/2, by + 28, 38, "#fff", "#000", "center");
+
+  drawText("Gõ chữ để nhập tên (tối đa 14 ký tự, có thể dùng tiếng Việt)",
+           W/2, by + bh + 24, 18, "#aef", "#000", "center");
+  drawText("Backspace để xoá ký tự",
+           W/2, by + bh + 50, 18, "#aef", "#000", "center");
+
+  if (typedName.trim().length > 0) {
+    const blink = Math.floor(Date.now() / 500) % 2 === 0;
+    drawText("► Bấm ENTER để bắt đầu ◄", W/2, H - 130, 30,
+             blink ? "#7afc6e" : "#fff", "#000", "center");
+  } else {
+    drawText("(Cần nhập tên trước khi bắt đầu)",
+             W/2, H - 130, 22, "#ff8a8a", "#000", "center");
+  }
+  drawText("ESC : Quay lại màn hình tiêu đề",
+           W/2, H - 80, 18, "#aef", "#000", "center");
+
+  // thông báo lỗi nếu có
+  if (noticeTimer > 0 && questNotice) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(W/2 - 360, H - 200, 720, 40);
+    drawText(questNotice, W/2, H - 192, 20, "#ff8a8a", "#000", "center");
+  }
+}
+
+// Màn hình thua - kèm bảng xếp hạng
+function drawGameOver() {
+  ctx.fillStyle = "rgba(0,0,0,0.85)";
+  ctx.fillRect(0, 0, W, H);
+  drawText("BẠN ĐÃ HẾT MẠNG!", W/2, 60,  60, "#ff4a4a", "#000", "center");
+  drawText("Đừng buồn, hải tặc vĩ đại nào cũng từng thất bại!",
+           W/2, 130, 22, "#fff", "#000", "center");
+  drawText(`${player.name} - Điểm: ${player.score}`,
+           W/2, 168, 26, "#ffd24a", "#000", "center");
+
+  drawLeaderboardPanel(W/2 - 320, 210, 640, 420, lastSavedEntry);
+
+  const blink = Math.floor(Date.now() / 500) % 2 === 0;
+  drawText("Bấm ENTER để về Màn hình tiêu đề", W/2, H - 50, 24,
+           blink ? "#7afc6e" : "#fff", "#000", "center");
+}
+
+// Màn hình thắng - kèm bảng xếp hạng
+function drawWin() {
+  if (Math.random() < 0.3) {
+    spawnParticles(rand(100, W - 100), rand(100, H/2), {
+      count: 20, color: choice(["#ff4a4a","#ffd24a","#4af0ff","#7afc6e","#ff8af0"]),
+      speed: 5, size: 4, life: 50, gravity: 0.06
+    });
+  }
+  ctx.fillStyle = "rgba(0, 30, 80, 0.88)";
+  ctx.fillRect(0, 0, W, H);
+  drawParticles(0, 0);
+  updateParticles();
+
+  drawText("CHIẾN THẮNG!", W/2, 50, 76, "#ffd24a", "#000", "center");
+  drawText("Bạn đã chinh phục cả 5 hòn đảo!", W/2, 140, 26, "#fff", "#000", "center");
+  drawText(`${player.name}  -  Điểm: ${player.score}  -  Vàng: ${player.gold}`,
+           W/2, 178, 22, "#fff5a0", "#000", "center");
+
+  drawLeaderboardPanel(W/2 - 320, 220, 640, 420, lastSavedEntry);
+
+  const blink = Math.floor(Date.now() / 500) % 2 === 0;
+  drawText("Bấm ENTER để về Màn hình tiêu đề", W/2, H - 50, 24,
+           blink ? "#7afc6e" : "#fff", "#000", "center");
+}
+
+// ===========================================================================
+// 19) VÒNG LẶP GAME --------------------------------------------------------
+// ===========================================================================
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

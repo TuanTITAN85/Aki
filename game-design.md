@@ -259,35 +259,78 @@ Sinh hoàn toàn từ **Web Audio API** (oscillator), không dùng file âm than
 
 ---
 
-## 15. 🛠️ Công Nghệ
+## 15. 🛠️ Công Nghệ & Kiến Trúc
 
-- **Frontend**: 1 file `index.html` duy nhất (HTML + CSS + JS thuần)
-- **Đồ hoạ**: HTML Canvas 2D API, không dùng thư viện game ngoài
-- **Âm thanh**: Web Audio API (oscillator + envelope)
-- **Lưu trữ cục bộ**: `localStorage` (cache bảng xếp hạng + dữ liệu offline)
-- **Backend**: **Firebase Firestore** (collection `leaderboard`)
-  - SDK: `firebase-app-compat.js` + `firebase-firestore-compat.js` (CDN từ gstatic.com)
+- **Frontend**: HTML + CSS + JavaScript thuần (không thư viện game)
+- **Đồ hoạ**: HTML Canvas 2D API
+- **Âm thanh**: Web Audio API (oscillator + envelope, không dùng file mp3/wav)
+- **Lưu trữ cục bộ**: `localStorage` (cache bảng xếp hạng cho lúc offline)
+- **Backend**: **Firebase Firestore** — collection `leaderboard`
+  - SDK: compat (CDN từ `gstatic.com`)
   - Region: `asia-southeast1`
-  - Security Rules: cho phép đọc công khai, ghi có validate (tên, điểm, đảo, won, date), cấm sửa/xoá
+  - Security Rules: đọc công khai, ghi có validate (tên 1-20 ký tự, điểm 0-1.000.000, đảo 0-5, có đủ trường), cấm sửa/xoá
 - **Hosting**: triển khai tĩnh tại `aki.tuantitan.com`
 - **Quản lý mã nguồn**: Git + GitHub (`https://github.com/TuanTITAN85/Aki`)
 
+### Kiến trúc file (sau refactor)
+
+Code tách thành **13 module** trong thư mục `src/`, load qua `<script src>`
+thông thường (không phải ES module — để giữ cú pháp `class`/`function` tự
+nhiên, không cần build tool):
+
+| Tầng | Module | Dòng | Vai trò |
+|---|---|---|---|
+| **Foundation** | `render.js` | 220 | drawText, particle, drawPixelSprite, sprite Hải tặc |
+| | `audio.js` | 107 | Web Audio + 11 SFX + BGM |
+| | `leaderboard.js` | 207 | Firestore + cache + xuất/nhập JSON |
+| | `orb.js` | 57 | class MagicOrb |
+| **Game entities** | `bosses.js` | 475 | 5 boss (vẽ + skill) + BOSS_KINDS |
+| | `player.js` | 183 | class Player |
+| | `enemy.js` | 318 | class Enemy + sprite GUARD/BEAST |
+| | `items.js` | 184 | Item, QuestNPC, Boat |
+| **Level + world** | `levels.js` | 270 | ISLAND_CONFIGS + buildIsland + quests |
+| | `world.js` | 163 | drawBackground/Platforms/Decorations + camera |
+| **UI** | `ui/hud.js` | 209 | drawHUD, drawPowerBar, drawCrosshair |
+| | `ui/shop.js` | 240 | SHOP_ITEMS + buyShopItem + drawShop |
+| | `ui/screens.js` | 269 | title/nameInput/quest/gameover/win |
+| **Glue** | `index.html` | 664 | state, input, update/draw chính, main loop |
+
+Tổng: ~3.566 dòng. `index.html` đã giảm từ 3.300 (bản v1 monolithic) xuống còn
+664 dòng (-80%) sau refactor — lợi cho bảo trì và tiết kiệm token khi nhờ AI
+sửa code.
+
+> ⚠️ **Lưu ý chạy local**: vì có nhiều file `src/*.js`, double-click
+> `index.html` sẽ không chạy được (Chrome chặn `file://` load same-directory
+> script). Phải dùng HTTP server: `python3 -m http.server 8000` rồi mở
+> `http://localhost:8000`. Trên hosting `aki.tuantitan.com` đã là HTTPS nên
+> không vấn đề.
+
+Xem `CLAUDE.md` ở thư mục gốc để biết chi tiết từng module + bản đồ dòng cho
+`index.html`.
+
 ---
 
-## 16. 🔥 Lộ Trình Phát Triển (đã hoàn thành trong session này)
+## 16. 🔥 Lộ Trình Phát Triển (đã hoàn thành)
 
+### Tính năng game
 - ✅ Bản v1: 5 đảo, lính, thú, boss, vật phẩm, nhiệm vụ, thuyền, camera, particle
-- ✅ Âm thanh BGM + 11 SFX khác nhau
-- ✅ Trái ác quỷ thay thế sức mạnh (5 loại)
+- ✅ Âm thanh BGM + 11 SFX
+- ✅ Trái ác quỷ — 5 loại sức mạnh
 - ✅ Mất mạng khi rơi biển
-- ✅ Tăng độ khó boss + lính + thú
-- ✅ Cửa hàng (12 mặt hàng), kiếm 3 cấp
+- ✅ Tăng độ khó boss + lính + thú (HP/dame/tốc độ)
+- ✅ Cửa hàng 12 mặt hàng, kiếm 3 cấp (×1.0/×1.2/×1.5/×2.0)
 - ✅ Bảng xếp hạng + nhập tên hải tặc
 - ✅ **Kho trái ác quỷ** (giữ tất cả, đổi qua lại bằng 1-6/Q)
 - ✅ **5 boss đa dạng** (hình dạng + skill khác nhau hoàn toàn)
 - ✅ **Bảng xếp hạng cloud** (Firebase Firestore — chia sẻ cho bạn bè)
 - ✅ **Backup file** JSON (xuất/nhập bằng phím B/L)
+
+### Kỹ thuật
 - ✅ Sửa overflow chữ trong UI
+- ✅ Thiết kế **flat, hiện đại** (bỏ viền 4 cạnh, dùng vạch nhấn 3-4px)
+- ✅ **Refactor 13 module** — `index.html` từ 3.300 → 664 dòng (-80%)
+- ✅ `CLAUDE.md` — bản đồ điều hướng cho dev / AI
+- ✅ Deploy lên `aki.tuantitan.com` + Firestore Security Rules
 
 ---
 

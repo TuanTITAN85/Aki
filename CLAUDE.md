@@ -1,8 +1,8 @@
 # CLAUDE.md — Hướng dẫn cho Claude / Codex / dev tương lai
 
 Đây là **bản đồ điều hướng** của project Island Pirates. Đọc file này TRƯỚC khi
-mở `index.html` để biết cần đọc đúng vùng dòng nào — tránh phải tải toàn bộ
-~3300 dòng vào context.
+mở code — biết cần mở đúng module nào thay vì tải toàn bộ ~3.500 dòng (chia cho
+13 file).
 
 ---
 
@@ -10,53 +10,57 @@ mở `index.html` để biết cần đọc đúng vùng dòng nào — tránh p
 
 ```
 /Users/titanium/game-cua-Aki/
-├── index.html          # game chính (1 file, ~3300 dòng)
-├── src/                # các module đã tách (load qua <script> tags)
-│   ├── audio.js        # Web Audio + BGM + SFX
-│   └── leaderboard.js  # Firestore + cache + import/export JSON
-├── game-design.md      # bản thiết kế chi tiết
-├── CLAUDE.md           # file này
-└── (firestore.rules)   # đã đặt trong Firebase Console
+├── index.html               # 664 dòng - glue code (state, input, main loop)
+├── src/
+│   ├── render.js            # 220 - drawText, particle, pixel sprite, PIRATE_*
+│   ├── audio.js             # 107 - Web Audio + 11 SFX + BGM loop
+│   ├── leaderboard.js       # 207 - Firestore + cache + xuất/nhập JSON
+│   ├── orb.js               #  57 - class MagicOrb (đạn phép)
+│   ├── bosses.js            # 475 - 5 boss draw + skill + BOSS_KINDS
+│   ├── player.js            # 183 - class Player
+│   ├── enemy.js             # 318 - class Enemy + sprite GUARD/BEAST
+│   ├── items.js             # 184 - Item, QuestNPC, Boat
+│   ├── levels.js            # 270 - ISLAND_CONFIGS + buildIsland + quests
+│   ├── world.js             # 163 - drawBackground/Platforms/Decorations + camera
+│   └── ui/
+│       ├── hud.js           # 209 - drawHUD, drawPowerBar, drawCrosshair
+│       ├── shop.js          # 240 - SHOP_ITEMS, buyShopItem, drawShop
+│       └── screens.js       # 269 - title/nameInput/quest/gameover/win
+├── game-design.md           # bản thiết kế chi tiết
+├── CLAUDE.md                # file này
+├── .gitignore
+└── (firestore.rules)        # đã đặt trong Firebase Console
 ```
 
-Module trong `src/` được load qua `<script src="src/...">` thông thường (không
+Module trong `src/` được load qua `<script src="src/...">` thông thường (KHÔNG
 phải ES module). Mọi function/biến trong các file này là **toàn cục** để code
-chính trong `index.html` gọi được.
+chính trong `index.html` gọi được. Thứ tự load: `render → audio → leaderboard
+→ orb → bosses → player → enemy → items → levels → world → ui/hud → ui/shop
+→ ui/screens` rồi cuối cùng inline `<script>` của index.html.
+
+> ⚠️ Vì có nhiều file `src/*.js` riêng, **không double-click `index.html`** để
+> chạy game (Chrome chặn `file://` load same-directory script). Phải dùng HTTP
+> server local: `python3 -m http.server` rồi mở `http://localhost:8000`.
 
 ---
 
-## Bản đồ `index.html` (~664 dòng — 13 module đã tách hết)
+## Bản đồ `index.html` (664 dòng — chỉ còn glue code)
 
 > Line numbers có thể lệch chút sau khi sửa - chạy `grep -n "^// [0-9]" index.html`
 > để lấy ranh giới chính xác.
 
 | Dòng (~) | Section | Tóm tắt |
 |---|---|---|
-| 1-32 | HEAD | CSS, Firebase compat SDK, `<script src="src/...">` (4 module) |
-| 35-65 | Setup canvas + hằng số | `W`, `H`, `GRAVITY`, `JUMP_POWER`, `FRICTION` |
-| 70-78 | **1+2+3) RENDER** | (đã tách → `src/render.js`) — chỉ comment trỏ tới module |
-| 80-126 | **3.5) BẢNG SỨC MẠNH** | `POWERS` (5 trái + default), `POWER_ORDER`, `FRUIT_VI_NAMES` |
-| 128-300 | **4) class Player** | physics, animation, takeDamage, fallIntoSea, acquireFruit |
-| 302-347 | **5) class MagicOrb** | đạn phép thuật + gravity (cho parabol chuối) |
-| 349-653 | **6) class Enemy** | guard / beast / boss; AI, attack pattern, draw dispatch theo `bossKind` |
-| 655-743 | **7) class Item** | coin + fruit (gọi `player.acquireFruit`) |
-| 745-794 | **8) class QuestNPC** | NPC giao nhiệm vụ (chấm than vàng) |
-| 796-827 | **9) class Boat** | thuyền sang đảo (kèm cờ đầu lâu) |
-| 829-834 | **9.5) BOSS** | (đã tách → `src/bosses.js`) — chỉ comment |
-| 836-926 | **10) ISLAND_CONFIGS** | 5 đảo: tên, màu sắc, bossKind, themes, decorations, quests |
-| 928-1060 | **11) buildIsland** | sinh platforms, enemies, items, NPCs, boats |
-| 1062-1094 | **12) NHIỆM VỤ** | `makeQuestState`, `updateQuests`, `allQuestsDone` |
-| 1096-1232 | **13) VẼ NỀN** | `drawBackground`, `drawPlatforms`, `drawDecorations` |
-| 1233-1245 | **14) CAMERA** | `updateCamera` (lerp follow) |
-| 1247-1333 | **15) ĐIỀU KHIỂN** | keydown/up + mouse handlers (digit 1-6, Q, E, B, L) |
-| 1335-1472 | **16) GAME STATE** | `STATE` enum, `SHOP_ITEMS`, shop layout, `buyShopItem`, `startGame`, `showNotice` |
-| 1474-1687 | **17) VÒNG LẶP UPDATE** | xử lý từng STATE, va chạm, attack, transitions |
-| 1689-2394 | **18) HÀM VẼ** | render world, UI, panels |
-| ↳ HUD, drawPowerBar | thanh sức mạnh + panel góc phải | |
-| ↳ drawShop, drawShopIcon, drawQuestPanel | các overlay | |
-| ↳ drawTitleScreen, drawNameInput | màn ngoài game | |
-| ↳ drawGameOver, drawWin, drawLeaderboardPanel | màn kết thúc | |
-| 2396-2406 | **19) VÒNG LẶP GAME** | `loop()` + `requestAnimationFrame` |
+| 1-47 | HEAD | CSS, Firebase compat SDK, **13** thẻ `<script src="src/...">` |
+| 53-76 | Setup canvas + hằng số | `canvas`, `ctx`, `W`, `H`, `GRAVITY`, `JUMP_POWER`, `FRICTION`, `AIR_DRAG`, `MOVE_SPEED` |
+| 78-86 | **1+2+3) RENDER** | (comment trỏ tới `src/render.js`) |
+| 89-134 | **3.5) BẢNG SỨC MẠNH** | `POWERS` (5 trái + default), `FRUIT_VI_NAMES`, `POWER_ORDER` |
+| 136-175 | **4-14) Comment trỏ tới module** | Player/Orb/Enemy/Item/Boss/Levels/World đã tách |
+| 178-264 | **15) ĐIỀU KHIỂN** | keydown/up + mouse handlers (gồm digit 1-6, Q, E, B, L, name input) |
+| 266-333 | **16) GAME STATE** | `STATE` enum, biến game state, `startGame`, `loadIsland`, `showNotice`, `commitScore` |
+| 335-548 | **17) VÒNG LẶP UPDATE** | `update()` — dispatch từng STATE, va chạm, attack, transitions |
+| 550-652 | **18) HÀM VẼ chính** | `draw()` — gọi tới các module draw* |
+| 654-664 | **19) loop()** | `requestAnimationFrame` đệ quy |
 
 ---
 
@@ -160,7 +164,42 @@ Các màn hình full-screen ngoài gameplay.
 
 ---
 
-## Quy ước
+## Quy ước sửa code (QUAN TRỌNG)
+
+### Surgery edit — KHÔNG rewrite cả file
+
+Khi sửa code, **luôn dùng `Edit` (chỉnh cục bộ) thay vì `Write` (ghi đè cả
+file)**. Lý do:
+
+- File lớn (`bosses.js` 475 dòng, `enemy.js` 318 dòng…) — viết lại toàn bộ tốn
+  rất nhiều token và dễ thay đổi vô tình các đoạn không liên quan.
+- Diff trong git rõ hơn — review chỉ thấy đúng phần đã sửa.
+- Giữ formatting / comment / blank lines của vùng xung quanh nguyên vẹn.
+
+**Quy tắc cụ thể:**
+
+1. **Mặc định luôn dùng `Edit`** — old_string bao đúng đoạn cần thay, new_string
+   chứa nội dung mới. Bao quanh đủ context để old_string là duy nhất, không
+   nhiều hơn.
+2. **Chỉ dùng `Write`** khi:
+   - Tạo file mới (chưa tồn tại)
+   - User yêu cầu rõ "viết lại từ đầu" / "rewrite file X"
+3. **Nhiều thay đổi nhỏ trong cùng file** → nhiều `Edit` liên tiếp, mỗi cái
+   sửa 1 chỗ. Không gộp thành 1 `Write` tổng.
+4. **Sửa pattern lặp ở nhiều chỗ** → dùng `Edit` với `replace_all: true` hoặc
+   nhiều `Edit` riêng. Tránh viết lại file để đổi tên 1 biến.
+5. **Refactor lớn (di chuyển khối code đi nơi khác)** → vẫn ưu tiên `Edit` cắt
+   ở chỗ cũ + `Edit` chèn ở chỗ mới. Hoặc dùng `python` regex thay thế khối
+   (như đã làm khi tách module) cho diff sạch.
+6. **Đọc trước khi sửa** — nếu chưa biết exact text, dùng `Read` với
+   `offset/limit` để xem đúng đoạn rồi mới `Edit`. Đừng đoán nội dung cũ.
+
+Nếu lỡ định `Write` 1 file đã tồn tại — dừng lại, mở nó bằng `Read` rồi
+chuyển sang `Edit`.
+
+---
+
+## Quy ước khác
 
 ### Section markers trong code
 Mỗi section đánh dấu 3 dòng:
@@ -230,10 +269,15 @@ Grep nhanh tất cả: `grep -n "^// [0-9]" index.html`
 
 ## Tiết kiệm token khi nhờ AI
 
-Thay vì `Read index.html` (~3300 dòng), dùng:
-- `Read index.html offset=1124 limit=60` — đọc đúng `drawMonkeyKing`
-- `Read src/audio.js` — module nhỏ, đọc trọn
-- `grep -n "function drawShop"` để tìm điểm bắt đầu rồi `Read offset=...`
+Code đã chia thành 13 module ~50-475 dòng/file. Cần sửa ở đâu thì đọc đúng file:
+
+- Sửa boss Yeti → `Read src/bosses.js` (475 dòng - hoặc dùng offset/limit)
+- Sửa âm thanh → `Read src/audio.js` (107 dòng)
+- Sửa shop → `Read src/ui/shop.js` (240 dòng)
+- Sửa AI quái → `Read src/enemy.js` (318 dòng)
+- Sửa logic chính (state, update loop) → `Read index.html` (664 dòng)
+
+Dùng `grep -rn "tên hàm" src/ index.html` để định vị nhanh trước khi đọc.
 
 Dùng `Edit` thay vì `Write` cho file lớn — diff thay vì toàn nội dung.
 

@@ -25,7 +25,7 @@ chính trong `index.html` gọi được.
 
 ---
 
-## Bản đồ `index.html` (~1.770 dòng — 7 module đã tách)
+## Bản đồ `index.html` (~664 dòng — 13 module đã tách hết)
 
 > Line numbers có thể lệch chút sau khi sửa - chạy `grep -n "^// [0-9]" index.html`
 > để lấy ranh giới chính xác.
@@ -119,6 +119,45 @@ Vật phẩm + NPC + thuyền — đều có animation bồng bềnh nhẹ.
 - `class QuestNPC` — đứng đầu đảo, dấu ! vàng nổi trên đầu, `inRange(player)`
 - `class Boat` — đứng vào để sang đảo, có cờ hải tặc đầu lâu
 
+### `src/orb.js` (57 dòng)
+Class `MagicOrb` — đạn phép thuật cho cả player và enemy. Constructor nhận
+vector hướng (dirX, dirY). Hỗ trợ gravity (cho đạn parabol như chuối).
+
+### `src/levels.js` (270 dòng)
+Cấu hình + sinh đảo + helpers nhiệm vụ.
+- `ISLAND_CONFIGS` — mảng 5 đảo với màu, boss, themes, decoration, quests
+- `buildIsland(idx)` — sinh platforms + 5 lính + 5 thú + boss + ~30 vàng + 1-3 trái + 1 thuyền + decorations
+- `makeQuestState`, `updateQuests`, `allQuestsDone`
+
+### `src/world.js` (163 dòng)
+Vẽ thế giới + camera lerp.
+- `drawBackground` — bầu trời gradient + mặt trời + mây + núi + biển + sóng
+- `drawPlatforms` — đất chính (3 lớp) + bục lơ lửng
+- `drawDecorations` — tree/cactus/pine/rock/cloud
+- `camera`, `updateCamera(player, level)` — lerp 0.12 follow + clamp rìa
+
+### `src/ui/hud.js` (209 dòng)
+HUD trong game.
+- `drawCrosshair` — vòng tròn ngắm theo chuột
+- `drawPowerBar` — 6 ô sức mạnh trên giữa, ô đang dùng có gạch chân vàng
+- `drawHUD` — panel góc phải (đảo, máu, mạng, điểm, vàng, sức mạnh, kiếm,
+  nhiệm vụ) + thẻ tên người chơi góc trái + boss bar giữa + hint dưới đáy
+
+### `src/ui/shop.js` (240 dòng)
+Cửa hàng - mở/đóng bằng E.
+- `SHOP_ITEMS` (12 món), `SHOP_LAYOUT`, `shopCardRect(idx)`
+- `buyShopItem(item)` — mua, đổi miễn phí nếu đã có fruit
+- `drawShopIcon`, `drawShop` — render lưới 3x4 thẻ phẳng
+
+### `src/ui/screens.js` (269 dòng)
+Các màn hình full-screen ngoài gameplay.
+- `drawSpaceBackground` — nền sao + sóng dùng chung
+- `drawLeaderboardPanel(x,y,w,h, highlight)` — top 10 + chỉ báo cloud
+- `drawTitleScreen` — 2 cột (hướng dẫn + leaderboard)
+- `drawNameInput` — ô nhập tên có con trỏ nhấp nháy
+- `drawQuestPanel` — overlay khi mở bảng nhiệm vụ
+- `drawGameOver`, `drawWin` — kèm leaderboard với entry vừa lập tô vàng
+
 ---
 
 ## Quy ước
@@ -211,11 +250,14 @@ Tách dần theo từng lần làm việc — KHÔNG nên tách đồng loạt:
 - [x] `src/player.js` — class Player (183 dòng)
 - [x] `src/enemy.js` — class Enemy + sprite GUARD_*/BEAST_* (318 dòng)
 - [x] `src/items.js` — Item, QuestNPC, Boat (184 dòng)
-- [ ] `src/levels.js` — ISLAND_CONFIGS + buildIsland + quest helpers (~230 dòng)
-- [ ] `src/world.js` — drawBackground, drawPlatforms, drawDecorations, camera (~150 dòng)
-- [ ] `src/ui/hud.js` — drawHUD, drawPowerBar (~200 dòng)
-- [ ] `src/ui/shop.js` — drawShop, SHOP_ITEMS, buyShopItem (~250 dòng)
-- [ ] `src/ui/screens.js` — title, name input, quest panel, gameover, win (~300 dòng)
+- [x] `src/orb.js` — class MagicOrb (57 dòng)
+- [x] `src/levels.js` — ISLAND_CONFIGS + buildIsland + quest helpers (270 dòng)
+- [x] `src/world.js` — drawBackground/Platforms/Decorations + camera (163 dòng)
+- [x] `src/ui/hud.js` — drawHUD, drawPowerBar, drawCrosshair (209 dòng)
+- [x] `src/ui/shop.js` — SHOP_ITEMS, buyShopItem, drawShop (240 dòng)
+- [x] `src/ui/screens.js` — title/nameInput/quest/gameover/win (269 dòng)
 
-`index.html` đã giảm từ ~3.300 → 1.770 dòng (-46%). Tách thêm 5 module nữa
-(~1100 dòng) sẽ còn `index.html` ~400 dòng (chủ yếu state, input, vòng lặp).
+🎉 **Tất cả 13 module đã tách xong.** `index.html` giảm từ ~3.300 → 664
+dòng (-80%). Phần còn lại chủ yếu là: HEAD, canvas setup, hằng số vật lý,
+POWERS table, input handlers, STATE, startGame/loadIsland/showNotice/commitScore,
+update() loop, draw() loop chính, vòng lặp `loop()`.

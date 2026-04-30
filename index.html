@@ -2672,8 +2672,11 @@ function draw() {
     const boxW = Math.min(W - 60, tw + padX * 2);
     const boxH = ns + padY * 2;
     const noticeY = 380;
-    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    // pill phẳng, vạch nhấn vàng dưới đáy
+    ctx.fillStyle = "rgba(14, 22, 48, 0.92)";
     ctx.fillRect(W/2 - boxW/2, noticeY, boxW, boxH);
+    ctx.fillStyle = "#ffd24a";
+    ctx.fillRect(W/2 - boxW/2, noticeY + boxH - 3, boxW, 3);
     drawText(questNotice, W/2, noticeY + padY, ns, "#fff", "#000", "center");
     ctx.globalAlpha = 1;
   }
@@ -2747,24 +2750,24 @@ function drawShopIcon(item, cx, cy) {
 // Vẽ cửa hàng (mở khi bấm E)
 // =====================================================================
 function drawShop() {
-  // nền mờ
-  ctx.fillStyle = "rgba(0,0,0,0.75)";
+  // backdrop làm mờ thế giới phía sau
+  ctx.fillStyle = "rgba(8, 14, 30, 0.82)";
   ctx.fillRect(0, 0, W, H);
 
   const L = SHOP_LAYOUT;
-  // panel chính
-  ctx.fillStyle = "#1c2750";
+  // panel chính - nền phẳng, chỉ một vạch nhấn vàng ở đỉnh
+  ctx.fillStyle = "#141d3a";
   ctx.fillRect(L.panelX, L.panelY, L.panelW, L.panelH);
-  ctx.strokeStyle = "#ffd24a"; ctx.lineWidth = 4;
-  ctx.strokeRect(L.panelX, L.panelY, L.panelW, L.panelH);
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(L.panelX, L.panelY, L.panelW, 4);
 
   // tiêu đề
   drawText("CỬA HÀNG HẢI TẶC",
-    L.panelX + L.panelW/2, L.panelY + 16, 32, "#ffd24a", "#000", "center");
+    L.panelX + L.panelW/2, L.panelY + 24, 30, "#ffd24a", "#000", "center");
   drawText("Vàng của bạn: " + player.gold,
-    L.panelX + 30, L.panelY + 70, 22, "#fff5a0", "#000", "left");
+    L.panelX + 30, L.panelY + 78, 20, "#ffe18a", "#000", "left");
   drawText("Bấm E hoặc ESC để đóng",
-    L.panelX + L.panelW - 30, L.panelY + 70, 18, "#aef", "#000", "right");
+    L.panelX + L.panelW - 30, L.panelY + 80, 16, "#8ea6c8", "#000", "right");
 
   // các thẻ hàng
   for (let i = 0; i < SHOP_ITEMS.length; i++) {
@@ -2780,19 +2783,23 @@ function drawShop() {
     const hover = (input.mouseX >= r.x && input.mouseX <= r.x + r.w &&
                    input.mouseY >= r.y && input.mouseY <= r.y + r.h);
 
-    // nền card
-    let bgCol = "#202c54";
-    let edgeCol = enough ? "#ffd24a" : "#666";
-    if (activeFruit) { bgCol = "#2a3a2a"; edgeCol = "#7afc6e"; }
-    else if (ownedFruit) { bgCol = "#264052"; edgeCol = "#7ad4ff"; }
-    else if (ownedSword) { bgCol = "#2a3a2a"; edgeCol = "#7afc6e"; }
-    if (hover && !activeFruit) bgCol = (ownedFruit ? "#365a72" : "#2c3a72");
+    // nền card phẳng - không viền, chỉ một vạch màu mỏng phía trái để báo trạng thái
+    let bgCol  = "#1c264a";
+    let accent = "#3a4a78";
+    if (activeFruit)      { bgCol = "#1f3a2a"; accent = "#5dd968"; }
+    else if (ownedFruit)  { bgCol = "#1c3548"; accent = "#5dccff"; }
+    else if (ownedSword)  { bgCol = "#1f3a2a"; accent = "#5dd968"; }
+    else if (!enough)     { accent = "#3a3a3a"; }
+    if (hover && !activeFruit) {
+      bgCol  = ownedFruit ? "#1f4258" : "#22305c";
+      accent = ownedFruit ? "#7ad4ff" : "#ffd24a";
+    }
 
     ctx.fillStyle = bgCol;
     ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.strokeStyle = edgeCol;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    // vạch nhấn 4px bên trái
+    ctx.fillStyle = accent;
+    ctx.fillRect(r.x, r.y, 4, r.h);
 
     // icon
     drawShopIcon(it, r.x + 50, r.y + r.h/2);
@@ -2872,15 +2879,20 @@ function drawPowerBar() {
     const active = player.power === power;
     const x = startX + i * (sw + pad);
 
-    ctx.fillStyle = active ? "rgba(255,210,74,0.30)" :
-                    owned  ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.40)";
+    // Slot phẳng: nền màu khác nhau theo trạng thái + vạch nhấn dưới đáy nếu active
+    ctx.fillStyle = active ? "rgba(255, 210, 74, 0.18)"
+                  : owned  ? "rgba(14, 22, 48, 0.78)"
+                           : "rgba(14, 22, 48, 0.42)";
     ctx.fillRect(x, y, sw, sh);
-    ctx.strokeStyle = active ? "#ffd24a" : (owned ? "#fff" : "#666");
-    ctx.lineWidth   = active ? 3 : 2;
-    ctx.strokeRect(x, y, sw, sh);
+    if (active) {
+      ctx.fillStyle = "#ffd24a";
+      ctx.fillRect(x, y + sh - 3, sw, 3);  // vạch vàng dưới đáy = đang dùng
+    }
 
-    drawText("[" + (i + 1) + "]",
-             x + sw/2, y + 4, 12, owned ? "#ffd24a" : "#888", "#000", "center");
+    drawText((i + 1) + "",
+             x + sw/2, y + 4, 12,
+             active ? "#ffd24a" : (owned ? "#dbe6f5" : "#5a6680"),
+             "#000", "center");
 
     if (owned) {
       // icon vòng tròn theo màu power
@@ -2913,13 +2925,12 @@ function drawPowerBar() {
 
 // HUD (góc trên bên phải): điểm, máu, mạng, vàng, sức mạnh, đảo, nhiệm vụ
 function drawHUD() {
-  // Bảng ở góc trên bên phải - rộng và cao hơn để đủ chỗ
+  // Panel phẳng, không viền, vạch nhấn vàng mỏng ở đỉnh
   const panelX = W - 360, panelY = 20, panelW = 340, panelH = 350;
-  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillStyle = "rgba(14, 22, 48, 0.82)";
   ctx.fillRect(panelX, panelY, panelW, panelH);
-  ctx.strokeStyle = "#ffd24a";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(panelX, panelY, panelW, panelH);
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(panelX, panelY, panelW, 3);
 
   // Tên đảo - co chữ lại nếu quá dài
   let nameSize = 20;
@@ -2928,43 +2939,40 @@ function drawHUD() {
     nameSize--;
     ctx.font = `bold ${nameSize}px sans-serif`;
   }
-  drawText(level.name, panelX + panelW/2, panelY + 10, nameSize, "#ffe06a", "#000", "center");
-  // Tên người chơi - hiển thị nhỏ ở góc trên bên trái màn hình
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
-  ctx.fillRect(20, 20, 220, 32);
-  drawText("👤 " + player.name, 30, 28, 18, "#aef", "#000");
+  drawText(level.name, panelX + panelW/2, panelY + 12, nameSize, "#ffe18a", "#000", "center");
 
-  // Máu
+  // Tên người chơi (góc trên trái màn hình) - phẳng, không viền
+  ctx.fillStyle = "rgba(14, 22, 48, 0.80)";
+  ctx.fillRect(20, 20, 220, 30);
+  ctx.fillStyle = "#5dccff";
+  ctx.fillRect(20, 20, 3, 30);
+  drawText(player.name, 32, 28, 17, "#dbe6f5", "#000");
+
+  // Máu - thanh không viền
   const hpRatio = clamp(player.hp / player.maxHp, 0, 1);
-  drawText("Máu", panelX + 14, panelY + 44, 16, "#fff");
-  const barX = panelX + 60, barW = panelW - 76;
-  ctx.fillStyle = "#3a0000";
-  ctx.fillRect(barX, panelY + 44, barW, 18);
-  ctx.fillStyle = "#ff4040";
-  ctx.fillRect(barX, panelY + 44, barW * hpRatio, 18);
-  ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
-  ctx.strokeRect(barX, panelY + 44, barW, 18);
+  drawText("Máu", panelX + 14, panelY + 46, 14, "#a8b6cc");
+  const barX = panelX + 60, barW = panelW - 76, barH = 16;
+  ctx.fillStyle = "rgba(255, 90, 90, 0.18)";
+  ctx.fillRect(barX, panelY + 46, barW, barH);
+  ctx.fillStyle = "#ff5a5a";
+  ctx.fillRect(barX, panelY + 46, barW * hpRatio, barH);
   drawText(`${Math.max(0, Math.floor(player.hp))}/${player.maxHp}`,
-           barX + barW/2, panelY + 46, 14, "#fff", "#000", "center");
+           barX + barW/2, panelY + 47, 13, "#fff", "#000", "center");
 
-  // Mạng (trái tim) - tối đa 5 ô
-  drawText("Mạng", panelX + 14, panelY + 76, 16, "#fff");
+  // Mạng (trái tim) - không có ô viền cho trái tim mất, dùng heart mờ thay
+  drawText("Mạng", panelX + 14, panelY + 76, 14, "#a8b6cc");
   const livesShown = Math.max(3, player.lives);
   for (let i = 0; i < livesShown; i++) {
     const hx = panelX + 66 + i * 28, hy = panelY + 80;
-    if (i < player.lives) {
-      ctx.fillStyle = "#ff4a6a";
-      ctx.beginPath();
-      ctx.arc(hx + 4,  hy + 4, 6, 0, Math.PI * 2);
-      ctx.arc(hx + 14, hy + 4, 6, 0, Math.PI * 2);
-      ctx.moveTo(hx, hy + 6);
-      ctx.lineTo(hx + 9, hy + 18);
-      ctx.lineTo(hx + 18, hy + 6);
-      ctx.fill();
-    } else {
-      ctx.strokeStyle = "#888"; ctx.lineWidth = 2;
-      ctx.strokeRect(hx, hy, 18, 18);
-    }
+    const filled = i < player.lives;
+    ctx.fillStyle = filled ? "#ff5a76" : "rgba(255, 90, 118, 0.15)";
+    ctx.beginPath();
+    ctx.arc(hx + 4,  hy + 4, 6, 0, Math.PI * 2);
+    ctx.arc(hx + 14, hy + 4, 6, 0, Math.PI * 2);
+    ctx.moveTo(hx, hy + 6);
+    ctx.lineTo(hx + 9, hy + 18);
+    ctx.lineTo(hx + 18, hy + 6);
+    ctx.fill();
   }
 
   // Điểm
@@ -3015,41 +3023,44 @@ function drawHUD() {
     qy += 18;
   }
 
-  // Bảng máu boss (đặt phía dưới Power Bar để không đè lên nhau)
+  // Bảng máu boss - phẳng, không viền
   if (level.boss && level.boss.alive && level.boss.aggro) {
     const bx = W/2 - 260, by = 110;
-    ctx.fillStyle = "rgba(0,0,0,0.65)";
-    ctx.fillRect(bx, by, 520, 42);
-    drawText("BOSS: " + level.config.bossName, W/2, by + 4, 18, "#ff8a8a", "#000", "center");
+    ctx.fillStyle = "rgba(14, 22, 48, 0.85)";
+    ctx.fillRect(bx, by, 520, 44);
+    ctx.fillStyle = "#ff5a5a";
+    ctx.fillRect(bx, by, 520, 3);    // vạch nhấn đỏ ở đỉnh
+    drawText("BOSS  ·  " + level.config.bossName,
+             W/2, by + 8, 16, "#ff8a8a", "#000", "center");
     const r = clamp(level.boss.hp / level.boss.maxHp, 0, 1);
-    ctx.fillStyle = "#3a0000"; ctx.fillRect(bx + 10, by + 24, 500, 14);
-    ctx.fillStyle = "#ff3838"; ctx.fillRect(bx + 10, by + 24, 500 * r, 14);
-    ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
-    ctx.strokeRect(bx + 10, by + 24, 500, 14);
+    ctx.fillStyle = "rgba(255, 90, 90, 0.18)"; ctx.fillRect(bx + 10, by + 26, 500, 12);
+    ctx.fillStyle = "#ff3838";                 ctx.fillRect(bx + 10, by + 26, 500 * r, 12);
   }
 
-  // Hướng dẫn ở góc dưới
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  // Hướng dẫn ở góc dưới - phẳng, vạch nhấn vàng mỏng bên trái
+  ctx.fillStyle = "rgba(14, 22, 48, 0.78)";
   ctx.fillRect(20, H - 110, 400, 90);
-  drawText("← → : Đi   ↑ / Cách : Nhảy",          30, H - 104, 16, "#fff");
-  drawText("Chuột trái: Phép Khống Chế Từ Xa",    30, H -  84, 16, "#cba9ff");
-  drawText("Enter: Bảng nhiệm vụ (gần NPC)",      30, H -  64, 16, "#ffd24a");
-  drawText("E: Mở/đóng Cửa Hàng (mua bằng vàng)", 30, H -  44, 16, "#fff5a0");
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(20, H - 110, 3, 90);
+  drawText("← → : Đi   ↑ / Cách : Nhảy",          32, H - 102, 15, "#dbe6f5");
+  drawText("Chuột trái : Phép Khống Chế Từ Xa",   32, H -  82, 15, "#cba9ff");
+  drawText("Enter : Bảng nhiệm vụ (gần NPC)",     32, H -  62, 15, "#5dd968");
+  drawText("E : Cửa Hàng  ·  1-6 / Q : Đổi sức mạnh", 32, H -  42, 15, "#ffe18a");
 }
 
 // Bảng nhiệm vụ chi tiết
 function drawQuestPanel() {
-  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.fillStyle = "rgba(8, 14, 30, 0.82)";
   ctx.fillRect(0, 0, W, H);
 
   const px = W/2 - 360, py = 100, pw = 720, ph = 480;
-  ctx.fillStyle = "#1c2750";
+  ctx.fillStyle = "#141d3a";
   ctx.fillRect(px, py, pw, ph);
-  ctx.strokeStyle = "#ffd24a"; ctx.lineWidth = 4;
-  ctx.strokeRect(px, py, pw, ph);
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(px, py, pw, 4);    // vạch nhấn đỉnh
 
-  drawText("BẢNG NHIỆM VỤ - " + level.name,
-           px + pw/2, py + 20, 28, "#ffd24a", "#000", "center");
+  drawText("BẢNG NHIỆM VỤ  ·  " + level.name,
+           px + pw/2, py + 24, 26, "#ffd24a", "#000", "center");
 
   drawText("Người dân: \"Chào hải tặc nhỏ! Hòn đảo của chúng tôi đang bị tấn công.",
            px + 30, py + 70, 16, "#fff");
@@ -3101,13 +3112,13 @@ function drawSpaceBackground() {
 // Vẽ bảng xếp hạng (top 10). Nếu highlight = entry vừa ghi -> tô vàng
 // =====================================================================
 function drawLeaderboardPanel(x, y, w, h, highlight) {
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillStyle = "rgba(14, 22, 48, 0.82)";
   ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = "#ffd24a"; ctx.lineWidth = 3;
-  ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(x, y, w, 3);    // vạch nhấn đỉnh, không viền 4 cạnh
 
   drawText("BẢNG XẾP HẠNG",
-    x + w/2, y + 12, 24, "#ffd24a", "#000", "center");
+    x + w/2, y + 14, 24, "#ffd24a", "#000", "center");
   // chỉ báo trạng thái đồng bộ cloud
   const statusText  = cloudStatus === "online"  ? "● Đã kết nối Internet"
                     : cloudStatus === "loading" ? "○ Đang đồng bộ..."
@@ -3166,14 +3177,14 @@ function drawTitleScreen() {
   drawText("ISLAND PIRATES", W/2, 50,  72, "#ffd24a", "#3a1a06", "center");
   drawText("HẢI TẶC ĐẢO",    W/2, 130, 32, "#fff",    "#3a1a06", "center");
 
-  // hộp hướng dẫn (trái)
+  // hộp hướng dẫn (trái) - phẳng, vạch nhấn vàng đỉnh
   const bx = 60, by = 200, bw = 560, bh = 380;
-  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillStyle = "rgba(14, 22, 48, 0.78)";
   ctx.fillRect(bx, by, bw, bh);
-  ctx.strokeStyle = "#ffd24a"; ctx.lineWidth = 3;
-  ctx.strokeRect(bx, by, bw, bh);
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(bx, by, bw, 3);
 
-  drawText("CÁCH CHƠI", bx + bw/2, by + 14, 26, "#ffd24a", "#000", "center");
+  drawText("CÁCH CHƠI", bx + bw/2, by + 14, 24, "#ffd24a", "#000", "center");
   drawText("← →  : Di chuyển trái / phải",         bx + 30, by + 60,  19, "#fff");
   drawText("↑ hoặc Cách : Nhảy lên",               bx + 30, by + 90,  19, "#fff");
   drawText("Chuột Trái : Bắn phép từ xa",          bx + 30, by + 120, 19, "#cba9ff");
@@ -3208,12 +3219,12 @@ function drawNameInput() {
   drawText("NHẬP TÊN HẢI TẶC", W/2, 130, 56, "#ffd24a", "#000", "center");
   drawText("Hãy đặt một cái tên thật ngầu!", W/2, 210, 22, "#fff", "#000", "center");
 
-  // ô nhập
+  // ô nhập - phẳng, gạch chân vàng đậm thay cho viền
   const bx = W/2 - 320, by = 280, bw = 640, bh = 90;
-  ctx.fillStyle = "#1c2750";
+  ctx.fillStyle = "rgba(14, 22, 48, 0.78)";
   ctx.fillRect(bx, by, bw, bh);
-  ctx.strokeStyle = "#ffd24a"; ctx.lineWidth = 4;
-  ctx.strokeRect(bx, by, bw, bh);
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(bx, by + bh - 4, bw, 4);   // gạch chân = focus indicator
   // nội dung + con trỏ nhấp nháy
   const cursor = (Math.floor(Date.now() / 400) % 2 === 0) ? "▌" : " ";
   const display = typedName + cursor;

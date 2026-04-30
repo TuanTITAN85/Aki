@@ -25,7 +25,7 @@ chính trong `index.html` gọi được.
 
 ---
 
-## Bản đồ `index.html` (~2.400 dòng)
+## Bản đồ `index.html` (~1.770 dòng — 7 module đã tách)
 
 > Line numbers có thể lệch chút sau khi sửa - chạy `grep -n "^// [0-9]" index.html`
 > để lấy ranh giới chính xác.
@@ -96,6 +96,28 @@ Bảng xếp hạng — Firestore cloud + localStorage cache + xuất/nhập fil
   `bossSkillYeti` (8 đạn radial), `bossSkillTiger` (5 đạn + dash),
   `bossSkillDarkKing` (6 tỏa tròn + 2 nhanh)
 - `BOSS_KINDS` — bảng tra cứu w/h/hpMul/dmgMul/cooldown/draw/skill
+
+### `src/player.js` (183 dòng)
+Class `Player` — hải tặc do người chơi điều khiển. Methods:
+- `update(input, level)` — xử lý di chuyển, nhảy, va chạm, rơi biển
+- `acquireFruit(fruit)` — thêm trái vào kho và đổi sang dùng
+- `swordMultiplier()` — hệ số sát thương theo cấp kiếm [1, 1.2, 1.5, 2.0]
+- `takeDamage(dmg)`, `fallIntoSea(level)`, `respawn(level)`
+- `draw(camX, camY)` — vẽ sprite hải tặc theo state (idle/run/jump)
+
+### `src/enemy.js` (318 dòng)
+Class `Enemy` (lính canh / thú rừng / boss) + sprite data.
+- Sprite: `GUARD_PALETTE`, `GUARD_BODY_1/2`, `BEAST_BODY_1/2`, `makeBeastPalette(theme)`
+- AI: tuần tra → quay đầu ở mép → aggro khi thấy player → đuổi/nhảy/đánh
+- Boss: dispatch tới `BOSS_KINDS[bossKind].draw/skill`
+- Methods: `update(level, player)`, `takeDamage`, `_collide`, `draw`
+
+### `src/items.js` (184 dòng)
+Vật phẩm + NPC + thuyền — đều có animation bồng bềnh nhẹ.
+- `class Item` — coin (+10💰 / +20 điểm) hoặc fruit (random 5 loại, gọi
+  `player.acquireFruit`, hồi 25 hp + 200 điểm)
+- `class QuestNPC` — đứng đầu đảo, dấu ! vàng nổi trên đầu, `inRange(player)`
+- `class Boat` — đứng vào để sang đảo, có cờ hải tặc đầu lâu
 
 ---
 
@@ -186,11 +208,14 @@ Tách dần theo từng lần làm việc — KHÔNG nên tách đồng loạt:
 - [x] `src/leaderboard.js` — Firestore + cache + import/export (207 dòng)
 - [x] `src/render.js` — drawText, particle, pixel sprite, PIRATE_* (220 dòng)
 - [x] `src/bosses.js` — 5 boss draw + skill + BOSS_KINDS (475 dòng)
-- [ ] `src/player.js` — class Player (~170 dòng)
-- [ ] `src/enemy.js` — class Enemy + sprite GUARD_*/BEAST_* (~330 dòng)
-- [ ] `src/items.js` — Item, QuestNPC, Boat (~200 dòng)
-- [ ] `src/levels.js` — ISLAND_CONFIGS + buildIsland (~230 dòng)
-- [ ] `src/ui/` — drawHUD, drawShop, drawTitleScreen, ... (~700 dòng)
+- [x] `src/player.js` — class Player (183 dòng)
+- [x] `src/enemy.js` — class Enemy + sprite GUARD_*/BEAST_* (318 dòng)
+- [x] `src/items.js` — Item, QuestNPC, Boat (184 dòng)
+- [ ] `src/levels.js` — ISLAND_CONFIGS + buildIsland + quest helpers (~230 dòng)
+- [ ] `src/world.js` — drawBackground, drawPlatforms, drawDecorations, camera (~150 dòng)
+- [ ] `src/ui/hud.js` — drawHUD, drawPowerBar (~200 dòng)
+- [ ] `src/ui/shop.js` — drawShop, SHOP_ITEMS, buyShopItem (~250 dòng)
+- [ ] `src/ui/screens.js` — title, name input, quest panel, gameover, win (~300 dòng)
 
-`index.html` đã giảm từ ~3.300 → 2.406 dòng. Sau khi tách hết sẽ còn ~50-100
-dòng wrapper + 1 main.js.
+`index.html` đã giảm từ ~3.300 → 1.770 dòng (-46%). Tách thêm 5 module nữa
+(~1100 dòng) sẽ còn `index.html` ~400 dòng (chủ yếu state, input, vòng lặp).

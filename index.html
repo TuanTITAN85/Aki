@@ -25,6 +25,10 @@
     cursor: crosshair;
   }
 </style>
+
+<!-- Firebase compat SDK: tải sẵn để JS chính dùng được biến `firebase` toàn cục -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 <div id="wrap">
@@ -2010,6 +2014,11 @@ window.addEventListener("keydown", e => {
   if (e.code === "Enter")      input.enter = true;
   if (e.code === "Escape")     input.esc = true;
   if (e.code === "KeyE")       input.shopKey = true;
+  // Xuất/Nhập bảng xếp hạng - chỉ ở màn hình Tiêu đề để khỏi nhầm
+  if (gameState === STATE.TITLE) {
+    if (e.code === "KeyB") exportLeaderboard();
+    if (e.code === "KeyL") importLeaderboard();
+  }
   // Phím 1-6: chuyển sang sức mạnh tương ứng (chỉ nếu đã sở hữu)
   if (e.code && e.code.startsWith("Digit")) {
     const n = parseInt(e.code.slice(5), 10);
@@ -2069,23 +2078,105 @@ const STATE = {
 };
 
 // =====================================================================
-// BẢNG XẾP HẠNG (lưu vào localStorage để giữ qua các lần chơi)
+// BẢNG XẾP HẠNG - Firestore (chính) + localStorage (cache offline)
+// Tất cả người chơi cùng đọc/ghi vào collection "leaderboard" trên cloud.
+// localStorage giữ một bản cache để game vẫn hiển thị được khi offline.
 // =====================================================================
 const LB_KEY = "islandPirates_leaderboard_v1";
+
+// Cấu hình Firebase do người dùng cung cấp
+const firebaseConfig = {
+  apiKey:            "AIzaSyC8luyPB0ukZ1vbVClG9TWoSmFt5kwWvvc",
+  authDomain:        "island-pirates.firebaseapp.com",
+  projectId:         "island-pirates",
+  storageBucket:     "island-pirates.firebasestorage.app",
+  messagingSenderId: "432929212029",
+  appId:             "1:432929212029:web:b8eda3990335bd77c61314",
+  measurementId:     "G-BTHTDVZ4N0"
+};
+
+// Khởi tạo Firebase. Nếu lỗi (ví dụ offline) thì tiếp tục dùng cache cục bộ.
+let fbDb = null;
+let cloudStatus = "loading";    // "loading" | "online" | "offline"
+try {
+  if (typeof firebase !== "undefined") {
+    firebase.initializeApp(firebaseConfig);
+    fbDb = firebase.firestore();
+  }
+} catch (e) {
+  console.warn("Firebase init lỗi:", e);
+}
+
+// Cache trong RAM - vẽ bảng dùng cache này (đồng bộ, không chờ network)
+let leaderboardCache = null;
+
 function loadLeaderboard() {
+  if (leaderboardCache) return leaderboardCache;
   try {
     const raw = localStorage.getItem(LB_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
-  } catch (e) { return []; }
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        leaderboardCache = arr;
+        return arr;
+      }
+    }
+  } catch (e) {}
+  leaderboardCache = [];
+  return leaderboardCache;
 }
 function saveLeaderboard(list) {
+  leaderboardCache = list;
   try { localStorage.setItem(LB_KEY, JSON.stringify(list)); } catch (e) {}
 }
-// Thêm điểm vào bảng, trả về danh sách top 10 mới
+
+// Lấy top 10 từ Firestore và cập nhật cache
+async function refreshLeaderboardFromCloud() {
+  if (!fbDb) { cloudStatus = "offline"; return; }
+  try {
+    const snap = await fbDb.collection("leaderboard")
+      .orderBy("score", "desc")
+      .limit(10)
+      .get();
+    const list = snap.docs.map(d => {
+      const x = d.data();
+      return {
+        name:    String(x.name || "Hải Tặc").slice(0, 14),
+        score:   Number(x.score) | 0,
+        islands: Number(x.islands) | 0,
+        won:     !!x.won,
+        date:    String(x.date || "")
+      };
+    });
+    saveLeaderboard(list);
+    cloudStatus = "online";
+  } catch (e) {
+    console.warn("Tải bảng xếp hạng lỗi:", e);
+    cloudStatus = "offline";
+  }
+}
+
+// Đẩy 1 điểm mới lên Firestore (không chờ kết quả - tối ưu UX)
+async function pushScoreToCloud(entry) {
+  if (!fbDb) return false;
+  try {
+    await fbDb.collection("leaderboard").add({
+      name:    entry.name,
+      score:   entry.score,
+      islands: entry.islands,
+      won:     entry.won,
+      date:    entry.date,
+      ts:      firebase.firestore.FieldValue.serverTimestamp()
+    });
+    return true;
+  } catch (e) {
+    console.warn("Ghi điểm lên cloud lỗi:", e);
+    return false;
+  }
+}
+
+// Thêm điểm vào bảng - cập nhật cache trước (game không chờ), sau đó push cloud
 function addScoreToLeaderboard(name, score, islandsCleared, won) {
-  const list = loadLeaderboard();
   const entry = {
     name: (name || "Hải Tặc").toString().slice(0, 14),
     score: Math.max(0, Math.floor(score)),
@@ -2093,17 +2184,78 @@ function addScoreToLeaderboard(name, score, islandsCleared, won) {
     won: !!won,
     date: new Date().toISOString().slice(0, 10)
   };
+  // Cập nhật ngay vào cache để bảng kết thúc game thấy điểm mình
+  const list = (leaderboardCache || loadLeaderboard()).slice();
   list.push(entry);
   list.sort((a, b) => b.score - a.score);
-  const top = list.slice(0, 10);
-  saveLeaderboard(top);
-  return { top, entry };
+  saveLeaderboard(list.slice(0, 10));
+
+  // Đẩy lên cloud song song (không chờ); sau đó kéo lại bản chính thức
+  pushScoreToCloud(entry).then(ok => {
+    if (ok) refreshLeaderboardFromCloud();
+  });
+
+  return { top: leaderboardCache, entry };
 }
+
+// Khởi đầu: kéo bảng từ cloud về cache ngay khi game tải xong
+refreshLeaderboardFromCloud();
+// Cập nhật mỗi 30 giây khi đang ở màn hình tiêu đề (để thấy bạn vừa chơi)
+setInterval(() => {
+  if (typeof gameState !== "undefined" && gameState === STATE.TITLE) {
+    refreshLeaderboardFromCloud();
+  }
+}, 30000);
 
 // Lưu trữ tạm khi đang nhập tên
 let typedName = "";
 let scoreSavedThisRound = false;
 let lastSavedEntry = null;     // dòng vừa lưu (để tô sáng trên bảng)
+
+// =====================================================================
+// XUẤT / NHẬP BẢNG XẾP HẠNG ra/vào file JSON (backup)
+// Hữu dụng khi muốn giữ bảng qua các lần xoá trình duyệt hoặc đổi máy
+// =====================================================================
+function exportLeaderboard() {
+  const data = loadLeaderboard();
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "island_pirates_leaderboard.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showNotice("Đã xuất bảng xếp hạng ra file!", 120);
+}
+function importLeaderboard() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.onchange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!Array.isArray(data)) throw new Error("Không phải mảng");
+        // đảm bảo mỗi phần tử có đủ trường
+        const cleaned = data.filter(x => x && typeof x.name === "string" &&
+                                          typeof x.score === "number");
+        cleaned.sort((a, b) => b.score - a.score);
+        saveLeaderboard(cleaned.slice(0, 10));
+        showNotice("Đã nhập bảng xếp hạng từ file!", 120);
+      } catch (err) {
+        showNotice("File không hợp lệ. Vui lòng chọn file JSON đúng định dạng.", 150);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
 
 // =====================================================================
 // CỬA HÀNG - danh sách mặt hàng. Bấm E để mở.
@@ -2954,8 +3106,16 @@ function drawLeaderboardPanel(x, y, w, h, highlight) {
   ctx.strokeStyle = "#ffd24a"; ctx.lineWidth = 3;
   ctx.strokeRect(x, y, w, h);
 
-  drawText("🏆 BẢNG XẾP HẠNG 🏆",
+  drawText("BẢNG XẾP HẠNG",
     x + w/2, y + 12, 24, "#ffd24a", "#000", "center");
+  // chỉ báo trạng thái đồng bộ cloud
+  const statusText  = cloudStatus === "online"  ? "● Đã kết nối Internet"
+                    : cloudStatus === "loading" ? "○ Đang đồng bộ..."
+                    : "× Mất kết nối (xem cache)";
+  const statusColor = cloudStatus === "online"  ? "#7afc6e"
+                    : cloudStatus === "loading" ? "#aef"
+                    : "#ff8a8a";
+  drawText(statusText, x + w/2, y + 38, 12, statusColor, "#000", "center");
 
   const list = loadLeaderboard();
   if (list.length === 0) {
@@ -3028,6 +3188,9 @@ function drawTitleScreen() {
 
   // bảng xếp hạng (phải)
   drawLeaderboardPanel(660, 200, 560, 380, null);
+  // chỉ dẫn xuất / nhập file
+  drawText("B : Xuất bảng ra file   |   L : Nhập bảng từ file",
+           940, 590, 14, "#aef", "#000", "center");
 
   // nút bắt đầu nhấp nháy
   const blink = Math.floor(Date.now() / 500) % 2 === 0;

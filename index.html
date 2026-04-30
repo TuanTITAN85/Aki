@@ -29,6 +29,10 @@
 <!-- Firebase compat SDK: tải sẵn để JS chính dùng được biến `firebase` toàn cục -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
+<!-- Module game đã tách ra (xem CLAUDE.md). Load trước inline script chính. -->
+<script src="src/audio.js"></script>
+<script src="src/leaderboard.js"></script>
 </head>
 <body>
 <div id="wrap">
@@ -87,103 +91,12 @@ function drawText(text, x, y, size = 18, color = "#fff", outline = "#000", align
 }
 
 // ===========================================================================
-// 1.5) HỆ THỐNG ÂM THANH (Web Audio API - không dùng file ngoài) -----------
-//      Tất cả tiếng đều được tạo từ oscillator để khỏi cần tải file
+// 1.5) HỆ THỐNG ÂM THANH ----------------------------------------------------
+//      Đã tách ra: src/audio.js
+//      API toàn cục: ensureAudio, playTone, sfxJump, sfxShoot, sfxHitEnemy,
+//        sfxKillEnemy, sfxHurt, sfxCoin, sfxFruit, sfxSplash, sfxBossShoot,
+//        sfxWin, sfxGameOver, startBGM, stopBGM
 // ===========================================================================
-let audioCtx = null;
-function ensureAudio() {
-  // Trình duyệt yêu cầu phải có hành động người dùng (click/phím) trước khi tạo
-  if (!audioCtx) {
-    try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    } catch (e) { audioCtx = null; }
-  }
-  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
-}
-
-// Phát một tone đơn giản với envelope tắt dần
-function playTone(freq, dur, opts = {}) {
-  if (!audioCtx) return;
-  const t0 = audioCtx.currentTime;
-  const o = audioCtx.createOscillator();
-  const g = audioCtx.createGain();
-  o.type = opts.type || "square";
-  o.frequency.setValueAtTime(freq, t0);
-  if (opts.endFreq != null) {
-    o.frequency.exponentialRampToValueAtTime(Math.max(1, opts.endFreq), t0 + dur);
-  }
-  const vol = opts.vol == null ? 0.1 : opts.vol;
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(g); g.connect(audioCtx.destination);
-  o.start(t0);
-  o.stop(t0 + dur + 0.05);
-}
-
-// Các hiệu ứng âm thanh trong game
-function sfxJump()   { playTone(380, 0.12, { type: "square",   endFreq: 720, vol: 0.07 }); }
-function sfxShoot()  { playTone(660, 0.08, { type: "square",   endFreq: 990, vol: 0.05 }); }
-function sfxHitEnemy(){ playTone(680, 0.06, { type: "square",   endFreq: 320, vol: 0.07 }); }
-function sfxKillEnemy() {
-  playTone(440, 0.10, { type: "square",   endFreq: 200, vol: 0.09 });
-  setTimeout(() => playTone(220, 0.18, { type: "sawtooth", endFreq: 70, vol: 0.09 }), 80);
-}
-function sfxHurt()   { playTone(220, 0.25, { type: "sawtooth", endFreq: 80,  vol: 0.13 }); }
-function sfxCoin() {
-  playTone(880, 0.06, { type: "sine", vol: 0.10 });
-  setTimeout(() => playTone(1320, 0.10, { type: "sine", vol: 0.10 }), 60);
-}
-function sfxFruit() {
-  // Cung 4 nốt đi lên - báo "vừa được sức mạnh mới"
-  const notes = [523, 659, 784, 1046];
-  notes.forEach((f, i) => setTimeout(() =>
-    playTone(f, 0.16, { type: "triangle", vol: 0.13 }), i * 90));
-}
-function sfxSplash() {
-  // Tiếng nước văng + rơi sâu
-  playTone(180, 0.4, { type: "sawtooth", endFreq: 60, vol: 0.16 });
-  setTimeout(() => playTone(120, 0.30, { type: "sine", endFreq: 50, vol: 0.10 }), 100);
-}
-function sfxBossShoot(){ playTone(180, 0.18, { type: "sawtooth", endFreq: 90, vol: 0.10 }); }
-function sfxWin() {
-  const notes = [523, 659, 784, 1046, 1318];
-  notes.forEach((f, i) => setTimeout(() =>
-    playTone(f, 0.22, { type: "triangle", vol: 0.14 }), i * 130));
-}
-function sfxGameOver() {
-  const notes = [440, 392, 349, 261];
-  notes.forEach((f, i) => setTimeout(() =>
-    playTone(f, 0.32, { type: "sawtooth", vol: 0.13 }), i * 200));
-}
-
-// Nhạc nền: melody pirate kiểu La thứ, lặp vô tận khi đang chơi
-const BGM_NOTES = [
-  // Câu nhạc 1
-  440, 523, 659, 880,  784, 659, 523, 659,
-  // Câu nhạc 2
-  698, 587, 494, 587,  523, 659, 440, 659
-];
-const BGM_BASS = [
-  110, 110, 110, 110, 110, 110, 110, 110,
-  87,  87,  87,  87,  73,  73,  110, 110
-];
-let bgmInterval = null;
-let bgmStep = 0;
-function startBGM() {
-  if (!audioCtx || bgmInterval) return;
-  bgmStep = 0;
-  bgmInterval = setInterval(() => {
-    const m = BGM_NOTES[bgmStep % BGM_NOTES.length];
-    const b = BGM_BASS[bgmStep % BGM_BASS.length];
-    playTone(m, 0.30, { type: "triangle", vol: 0.04 });
-    if (bgmStep % 2 === 0) playTone(b, 0.45, { type: "sine", vol: 0.05 });
-    bgmStep++;
-  }, 320);
-}
-function stopBGM() {
-  if (bgmInterval) { clearInterval(bgmInterval); bgmInterval = null; }
-}
 
 // ===========================================================================
 // 2) HỆ THỐNG HẠT (Particle System) ----------------------------------------
@@ -2078,184 +1991,13 @@ const STATE = {
 };
 
 // =====================================================================
-// BẢNG XẾP HẠNG - Firestore (chính) + localStorage (cache offline)
-// Tất cả người chơi cùng đọc/ghi vào collection "leaderboard" trên cloud.
-// localStorage giữ một bản cache để game vẫn hiển thị được khi offline.
+// BẢNG XẾP HẠNG -------------------------------------------------------
+// Đã tách ra: src/leaderboard.js
+// API toàn cục: loadLeaderboard, saveLeaderboard, addScoreToLeaderboard,
+//   refreshLeaderboardFromCloud, exportLeaderboard, importLeaderboard
+// Trạng thái: cloudStatus, leaderboardCache,
+//   typedName, scoreSavedThisRound, lastSavedEntry
 // =====================================================================
-const LB_KEY = "islandPirates_leaderboard_v1";
-
-// Cấu hình Firebase do người dùng cung cấp
-const firebaseConfig = {
-  apiKey:            "AIzaSyC8luyPB0ukZ1vbVClG9TWoSmFt5kwWvvc",
-  authDomain:        "island-pirates.firebaseapp.com",
-  projectId:         "island-pirates",
-  storageBucket:     "island-pirates.firebasestorage.app",
-  messagingSenderId: "432929212029",
-  appId:             "1:432929212029:web:b8eda3990335bd77c61314",
-  measurementId:     "G-BTHTDVZ4N0"
-};
-
-// Khởi tạo Firebase. Nếu lỗi (ví dụ offline) thì tiếp tục dùng cache cục bộ.
-let fbDb = null;
-let cloudStatus = "loading";    // "loading" | "online" | "offline"
-try {
-  if (typeof firebase !== "undefined") {
-    firebase.initializeApp(firebaseConfig);
-    fbDb = firebase.firestore();
-  }
-} catch (e) {
-  console.warn("Firebase init lỗi:", e);
-}
-
-// Cache trong RAM - vẽ bảng dùng cache này (đồng bộ, không chờ network)
-let leaderboardCache = null;
-
-function loadLeaderboard() {
-  if (leaderboardCache) return leaderboardCache;
-  try {
-    const raw = localStorage.getItem(LB_KEY);
-    if (raw) {
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) {
-        leaderboardCache = arr;
-        return arr;
-      }
-    }
-  } catch (e) {}
-  leaderboardCache = [];
-  return leaderboardCache;
-}
-function saveLeaderboard(list) {
-  leaderboardCache = list;
-  try { localStorage.setItem(LB_KEY, JSON.stringify(list)); } catch (e) {}
-}
-
-// Lấy top 10 từ Firestore và cập nhật cache
-async function refreshLeaderboardFromCloud() {
-  if (!fbDb) { cloudStatus = "offline"; return; }
-  try {
-    const snap = await fbDb.collection("leaderboard")
-      .orderBy("score", "desc")
-      .limit(10)
-      .get();
-    const list = snap.docs.map(d => {
-      const x = d.data();
-      return {
-        name:    String(x.name || "Hải Tặc").slice(0, 14),
-        score:   Number(x.score) | 0,
-        islands: Number(x.islands) | 0,
-        won:     !!x.won,
-        date:    String(x.date || "")
-      };
-    });
-    saveLeaderboard(list);
-    cloudStatus = "online";
-  } catch (e) {
-    console.warn("Tải bảng xếp hạng lỗi:", e);
-    cloudStatus = "offline";
-  }
-}
-
-// Đẩy 1 điểm mới lên Firestore (không chờ kết quả - tối ưu UX)
-async function pushScoreToCloud(entry) {
-  if (!fbDb) return false;
-  try {
-    await fbDb.collection("leaderboard").add({
-      name:    entry.name,
-      score:   entry.score,
-      islands: entry.islands,
-      won:     entry.won,
-      date:    entry.date,
-      ts:      firebase.firestore.FieldValue.serverTimestamp()
-    });
-    return true;
-  } catch (e) {
-    console.warn("Ghi điểm lên cloud lỗi:", e);
-    return false;
-  }
-}
-
-// Thêm điểm vào bảng - cập nhật cache trước (game không chờ), sau đó push cloud
-function addScoreToLeaderboard(name, score, islandsCleared, won) {
-  const entry = {
-    name: (name || "Hải Tặc").toString().slice(0, 14),
-    score: Math.max(0, Math.floor(score)),
-    islands: islandsCleared | 0,
-    won: !!won,
-    date: new Date().toISOString().slice(0, 10)
-  };
-  // Cập nhật ngay vào cache để bảng kết thúc game thấy điểm mình
-  const list = (leaderboardCache || loadLeaderboard()).slice();
-  list.push(entry);
-  list.sort((a, b) => b.score - a.score);
-  saveLeaderboard(list.slice(0, 10));
-
-  // Đẩy lên cloud song song (không chờ); sau đó kéo lại bản chính thức
-  pushScoreToCloud(entry).then(ok => {
-    if (ok) refreshLeaderboardFromCloud();
-  });
-
-  return { top: leaderboardCache, entry };
-}
-
-// Khởi đầu: kéo bảng từ cloud về cache ngay khi game tải xong
-refreshLeaderboardFromCloud();
-// Cập nhật mỗi 30 giây khi đang ở màn hình tiêu đề (để thấy bạn vừa chơi)
-setInterval(() => {
-  if (typeof gameState !== "undefined" && gameState === STATE.TITLE) {
-    refreshLeaderboardFromCloud();
-  }
-}, 30000);
-
-// Lưu trữ tạm khi đang nhập tên
-let typedName = "";
-let scoreSavedThisRound = false;
-let lastSavedEntry = null;     // dòng vừa lưu (để tô sáng trên bảng)
-
-// =====================================================================
-// XUẤT / NHẬP BẢNG XẾP HẠNG ra/vào file JSON (backup)
-// Hữu dụng khi muốn giữ bảng qua các lần xoá trình duyệt hoặc đổi máy
-// =====================================================================
-function exportLeaderboard() {
-  const data = loadLeaderboard();
-  const json = JSON.stringify(data, null, 2);
-  const blob = new Blob([json], { type: "application/json" });
-  const url  = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "island_pirates_leaderboard.json";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  showNotice("Đã xuất bảng xếp hạng ra file!", 120);
-}
-function importLeaderboard() {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = "application/json,.json";
-  input.onchange = (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if (!Array.isArray(data)) throw new Error("Không phải mảng");
-        // đảm bảo mỗi phần tử có đủ trường
-        const cleaned = data.filter(x => x && typeof x.name === "string" &&
-                                          typeof x.score === "number");
-        cleaned.sort((a, b) => b.score - a.score);
-        saveLeaderboard(cleaned.slice(0, 10));
-        showNotice("Đã nhập bảng xếp hạng từ file!", 120);
-      } catch (err) {
-        showNotice("File không hợp lệ. Vui lòng chọn file JSON đúng định dạng.", 150);
-      }
-    };
-    reader.readAsText(file);
-  };
-  input.click();
-}
 
 // =====================================================================
 // CỬA HÀNG - danh sách mặt hàng. Bấm E để mở.

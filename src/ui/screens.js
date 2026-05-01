@@ -1,8 +1,15 @@
 "use strict";
 // =============================================================================
 // Tải ảnh nền cho title screen (đã chứa sẵn title + character + "Bấm Enter")
+// Đăng ký vào AssetLoader để loading screen biết khi nào tải xong.
 // =============================================================================
+AssetLoader.expect();
 const introBg = new Image();
+introBg.onload  = () => AssetLoader.done(true);
+introBg.onerror = () => {
+  console.warn("Không tải được intro_screen.png - title sẽ dùng nền sao");
+  AssetLoader.done(false);
+};
 introBg.src = "assets/intro_screen.png";
 
 // =============================================================================
@@ -139,6 +146,47 @@ function drawQuestPanel() {
 
   drawText("Bấm Enter hoặc ESC để tiếp tục",
            px + pw/2, py + ph - 40, 18, "#ffd24a", "#000", "center");
+}
+
+// =============================================================================
+// Màn hình LOADING - hiển thị tiến độ tải tài nguyên trước khi vào title
+// Tự động chuyển sang STATE.TITLE khi AssetLoader.isReady() (xem update loop).
+// =============================================================================
+function drawLoadingScreen() {
+  // Nền gradient xanh đậm
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "#0e1530");
+  g.addColorStop(1, "#1a2348");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // Tiêu đề game (text - vì ảnh chưa chắc đã tải xong)
+  drawText("ISLAND PIRATES", W/2, H/2 - 110, 64, "#ffd24a", "#3a1a06", "center");
+  drawText("HẢI TẶC ĐẢO",    W/2, H/2 - 50,  28, "#fff",    "#3a1a06", "center");
+
+  // Thông báo trạng thái
+  drawText("Đang tải tài nguyên...", W/2, H/2 + 30, 22, "#aef", "#000", "center");
+
+  // Progress bar - phẳng, vạch nhấn vàng đầy dần
+  const barW = 480, barH = 22;
+  const barX = (W - barW) / 2, barY = H/2 + 80;
+  const p = AssetLoader.progress();
+  ctx.fillStyle = "rgba(14, 22, 48, 0.9)";
+  ctx.fillRect(barX, barY, barW, barH);
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(barX, barY, barW * p, barH);
+  drawText(`${Math.floor(p * 100)}%`,
+           W/2, barY + 3, 14, "#fff", "#000", "center");
+
+  // Đếm số tài nguyên + trạng thái
+  const okPart   = `${AssetLoader.loaded} đã tải`;
+  const failPart = AssetLoader.failed > 0 ? `, ${AssetLoader.failed} lỗi` : "";
+  drawText(`${okPart}${failPart} / ${AssetLoader.total} tổng cộng`,
+           W/2, barY + barH + 16, 14, "#aef", "#000", "center");
+
+  // Hint nhỏ ở chân màn hình
+  drawText("Game sẽ tự bắt đầu khi tải xong",
+           W/2, H - 60, 16, "rgba(255,255,255,0.5)", "#000", "center");
 }
 
 // =============================================================================

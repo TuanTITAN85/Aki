@@ -220,6 +220,31 @@ const PIRATE_JUMP = [
 ];
 
 // =============================================================================
+// ASSET LOADER - đếm tài nguyên đang tải để loading screen hiển thị tiến độ
+//   Mỗi nơi load asset (PNG, etc.) gọi:
+//     AssetLoader.expect()         - báo trước "tôi sắp tải 1 file"
+//     AssetLoader.done(ok)         - khi tải xong (ok=true) hoặc fail (ok=false)
+//   Game state machine:
+//     AssetLoader.isReady()        - true khi tất cả asset đã xong (success/fail)
+//     AssetLoader.progress()       - 0..1 cho progress bar
+// =============================================================================
+const AssetLoader = {
+  total: 0,
+  loaded: 0,
+  failed: 0,
+  expect() { this.total++; },
+  done(ok) { if (ok) this.loaded++; else this.failed++; },
+  isReady() {
+    // total>0 đảm bảo ít nhất có 1 asset đã đăng ký (tránh ready ngay frame đầu
+    // khi script chưa kịp gọi expect())
+    return this.total > 0 && (this.loaded + this.failed >= this.total);
+  },
+  progress() {
+    return this.total === 0 ? 0 : (this.loaded + this.failed) / this.total;
+  }
+};
+
+// =============================================================================
 // SPRITE SHEET CỦA HẢI TẶC - 1 file PNG duy nhất chứa 4x4 = 16 frame
 //   Hàng 0: idle  (4 frame)
 //   Hàng 1: run   (4 frame)
@@ -266,6 +291,7 @@ function chromaKey(canvas, threshold = 35) {
 }
 
 function loadPirateSheet() {
+  AssetLoader.expect();
   const img = new Image();
   img.onload = () => {
     const c = document.createElement("canvas");
@@ -278,10 +304,12 @@ function loadPirateSheet() {
     PIRATE_SHEET.frameW = img.width  / PIRATE_SHEET.cols;
     PIRATE_SHEET.frameH = img.height / PIRATE_SHEET.rows;
     PIRATE_SHEET.ready = true;
+    AssetLoader.done(true);
   };
   img.onerror = () => {
     console.warn("Không tải được sprite sheet:", PIRATE_SHEET.src,
                  "- player sẽ dùng pixel matrix cũ");
+    AssetLoader.done(false);
   };
   img.src = PIRATE_SHEET.src;
 }

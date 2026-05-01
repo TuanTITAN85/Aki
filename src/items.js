@@ -73,28 +73,31 @@ class Item {
       ctx.textAlign = "center";
       ctx.fillText("$", cx + 12, cy + 17);
     } else {
-      // trái ma thuật - màu khác nhau theo loại
-      const colors = {
-        dragon:  ["#ff4a4a", "#7a0a0a"],
-        flame:   ["#ff8a3c", "#a51212"],
-        ice:     ["#9ee0ff", "#1c5a8a"],
-        thunder: ["#fff14a", "#a8881a"],
-        wind:    ["#aaffd0", "#1a7a4a"]
-      }[this.fruit];
-      // thân trái cây
-      ctx.fillStyle = colors[1];
-      ctx.beginPath(); ctx.arc(cx + 14, cy + 16, 13, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = colors[0];
-      ctx.beginPath(); ctx.arc(cx + 14, cy + 16, 10, 0, Math.PI * 2); ctx.fill();
-      // điểm sáng
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(cx + 8, cy + 10, 3, 3);
-      // cuống
-      ctx.fillStyle = "#3a8a2a";
-      ctx.fillRect(cx + 12, cy + 2, 4, 6);
-      // lá
-      ctx.fillStyle = "#5ec85a";
-      ctx.fillRect(cx + 16, cy + 4, 6, 3);
+      // Trái ác quỷ - dùng PNG asset (1024x1024 source, scale xuống 36x36)
+      // căn giữa collision box 28x28, có hiệu ứng bồng bềnh từ yOff
+      const dispW = 36, dispH = 36;
+      const dispX = cx + this.w/2 - dispW/2;
+      const dispY = cy + this.h/2 - dispH/2;
+      if (!drawFruitImage(this.fruit, dispX, dispY, dispW, dispH)) {
+        // Fallback: vẽ circles cũ nếu PNG chưa tải xong
+        const colors = {
+          dragon:  ["#ff4a4a", "#7a0a0a"],
+          flame:   ["#ff8a3c", "#a51212"],
+          ice:     ["#9ee0ff", "#1c5a8a"],
+          thunder: ["#fff14a", "#a8881a"],
+          wind:    ["#aaffd0", "#1a7a4a"]
+        }[this.fruit];
+        ctx.fillStyle = colors[1];
+        ctx.beginPath(); ctx.arc(cx + 14, cy + 16, 13, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = colors[0];
+        ctx.beginPath(); ctx.arc(cx + 14, cy + 16, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(cx + 8, cy + 10, 3, 3);
+        ctx.fillStyle = "#3a8a2a";
+        ctx.fillRect(cx + 12, cy + 2, 4, 6);
+        ctx.fillStyle = "#5ec85a";
+        ctx.fillRect(cx + 16, cy + 4, 6, 3);
+      }
     }
   }
 }

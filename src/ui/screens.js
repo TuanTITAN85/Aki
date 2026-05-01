@@ -249,6 +249,104 @@ function drawTitleScreen() {
 }
 
 // =============================================================================
+// Màn hình nhập tên chú Cún - hiện sau khi bấm mua Cún trong shop
+// =============================================================================
+function drawDogNamePanel() {
+  // Nền tối overlay
+  ctx.fillStyle = "rgba(8, 14, 30, 0.88)";
+  ctx.fillRect(0, 0, W, H);
+
+  // Panel trung tâm
+  const px = W/2 - 360, py = H/2 - 260, pw = 720, ph = 520;
+  ctx.fillStyle = "#141d3a";
+  ctx.fillRect(px, py, pw, ph);
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(px, py, pw, 4);    // vạch nhấn đỉnh
+
+  // Tiêu đề
+  drawText("ĐẶT TÊN CHO CHÚ CÚN", W/2, py + 44, 34, "#ffd24a", "#000", "center");
+  drawText("Chú Cún sẽ đồng hành cùng bạn suốt hành trình!",
+           W/2, py + 80, 18, "#aef", "#000", "center");
+
+  // Vẽ hình con Cún bằng canvas primitives (golden retriever đơn giản)
+  const cx = W/2, cy = py + 200;
+  // Body
+  ctx.fillStyle = "#d4a050";
+  ctx.beginPath(); ctx.ellipse(cx, cy, 80, 48, 0, 0, Math.PI * 2); ctx.fill();
+  // Shadow / darker back
+  ctx.fillStyle = "#a07030";
+  ctx.beginPath(); ctx.ellipse(cx - 10, cy, 55, 30, 0, 0, Math.PI * 2); ctx.fill();
+  // Head
+  ctx.fillStyle = "#d4a050";
+  ctx.beginPath(); ctx.ellipse(cx + 80, cy - 10, 38, 32, 0, 0, Math.PI * 2); ctx.fill();
+  // Ear left
+  ctx.fillStyle = "#a07030";
+  ctx.beginPath(); ctx.ellipse(cx + 65, cy - 38, 14, 20, -0.3, 0, Math.PI * 2); ctx.fill();
+  // Ear right
+  ctx.beginPath(); ctx.ellipse(cx + 95, cy - 36, 14, 20, 0.3, 0, Math.PI * 2); ctx.fill();
+  // Snout
+  ctx.fillStyle = "#ffd6a8";
+  ctx.beginPath(); ctx.ellipse(cx + 112, cy - 2, 18, 14, 0, 0, Math.PI * 2); ctx.fill();
+  // Nose
+  ctx.fillStyle = "#1a1a1a";
+  ctx.beginPath(); ctx.ellipse(cx + 126, cy - 4, 7, 6, 0, 0, Math.PI * 2); ctx.fill();
+  // Eye
+  ctx.beginPath(); ctx.arc(cx + 92, cy - 14, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.arc(cx + 93, cy - 15, 2, 0, Math.PI * 2); ctx.fill();
+  // Tail
+  ctx.fillStyle = "#d4a050";
+  ctx.beginPath();
+  ctx.moveTo(cx - 75, cy - 20);
+  ctx.quadraticCurveTo(cx - 110, cy - 60, cx - 90, cy - 80);
+  ctx.quadraticCurveTo(cx - 70, cy - 60, cx - 75, cy - 20);
+  ctx.fill();
+  // Legs
+  ctx.fillStyle = "#d4a050";
+  ctx.fillRect(cx - 45, cy + 25, 20, 36);
+  ctx.fillRect(cx - 10, cy + 25, 20, 36);
+  ctx.fillRect(cx + 30, cy + 25, 20, 36);
+  ctx.fillRect(cx + 55, cy + 25, 20, 36);
+  // Paws
+  ctx.fillStyle = "#a07030";
+  ctx.fillRect(cx - 48, cy + 55, 26, 10);
+  ctx.fillRect(cx - 13, cy + 55, 26, 10);
+  ctx.fillRect(cx + 27, cy + 55, 26, 10);
+  ctx.fillRect(cx + 52, cy + 55, 26, 10);
+  // Smile
+  ctx.strokeStyle = "#a07030";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx + 116, cy + 4, 8, 0, Math.PI * 0.5);
+  ctx.stroke();
+
+  // Thẻ nhập tên
+  const boxX = W/2 - 240, boxY = py + 330, boxW = 480, boxH = 60;
+  ctx.fillStyle = "#0e1530";
+  ctx.fillRect(boxX, boxY, boxW, boxH);
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(boxX, boxY, boxW, 3);
+  ctx.fillRect(boxX, boxY + boxH - 3, boxW, 3);
+  ctx.fillRect(boxX, boxY, 3, boxH);
+  ctx.fillRect(boxX + boxW - 3, boxY, 3, boxH);
+
+  // Tên đang gõ + con trỏ nhấp nháy
+  const display = dogNameInput + ((Math.floor(Date.now() / 400) % 2 === 0) ? "▌" : " ");
+  ctx.font = "bold 34px sans-serif";
+  ctx.fillStyle = "#d4a050";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(display, W/2, boxY + boxH/2);
+
+  // Giới hạn ký tự
+  drawText(`${dogNameInput.length}/14`, W/2 + 210, boxY + boxH/2, 16, "#666", "#000", "center");
+
+  // Hint
+  drawText("Enter để xác nhận", W/2 - 100, py + ph - 55, 20, "#7afc6e", "#000", "center");
+  drawText("ESC để hủy", W/2 + 100, py + ph - 55, 20, "#ff6a6a", "#000", "center");
+}
+
+// =============================================================================
 // Màn hình nhập tên hải tặc
 // Dùng ảnh nền có sẵn title "NHẬP TÊN HẢI TẶC" + subtitle + parchment scroll
 // + hint "Tối đa 14 ký tự — Bấm ENTER để bắt đầu"

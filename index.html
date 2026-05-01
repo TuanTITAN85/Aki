@@ -37,6 +37,7 @@
 <script src="src/orb.js"></script>
 <script src="src/bosses.js"></script>
 <script src="src/player.js"></script>
+<script src="src/companion.js"></script>
 <script src="src/enemy.js"></script>
 <script src="src/items.js"></script>
 <script src="src/levels.js"></script>
@@ -190,7 +191,8 @@ const POWER_ORDER = ["default", "dragon", "flame", "ice", "thunder", "wind"];
 // ===========================================================================
 const input = {
   left: false, right: false, up: false, down: false,
-  jump: false, mouseDown: false, mouseX: 0, mouseY: 0
+  jump: false, mouseDown: false, mouseX: 0, mouseY: 0,
+  bs: false   // Backspace cho nhập tên Cún
 };
 window.addEventListener("keydown", e => {
   // Khi đang nhập tên: chỉ bắt Enter/Escape ở đây, mọi phím chữ/số/IME để
@@ -201,11 +203,17 @@ window.addEventListener("keydown", e => {
     if (e.code === "Escape") { input.esc = true; return; }
     return;   // chặn không cho phím game chạy lúc đang gõ tên
   }
+  // Nhập tên chú Cún - bắt Enter/Escape/Backspace ở đây, ký tự để lại
+  if (typeof gameState !== "undefined" && gameState === STATE.DOG_NAME) {
+    if (e.code === "Enter")  { input.enter = true; e.preventDefault(); return; }
+    if (e.code === "Escape") { input.esc = true; return; }
+    if (e.code === "Backspace") { input.bs = true; e.preventDefault(); return; }
+    return;   // chặn các phím khác không ảnh hưởng game
+  }
   if (e.code === "ArrowLeft")  input.left = true;
   if (e.code === "ArrowRight") input.right = true;
   if (e.code === "ArrowUp")    input.up = true;
   if (e.code === "ArrowDown")  input.down = true;
-  if (e.code === "Space")      { input.jump = true; e.preventDefault(); }
   if (e.code === "Enter")      input.enter = true;
   if (e.code === "Escape")     input.esc = true;
   if (e.code === "KeyE")       input.shopKey = true;
@@ -244,6 +252,7 @@ window.addEventListener("keyup", e => {
   if (e.code === "Enter")      input.enter = false;
   if (e.code === "Escape")     input.esc = false;
   if (e.code === "KeyE")       input.shopKey = false;
+  if (e.code === "Backspace")   input.bs = false;
 });
 canvas.addEventListener("mousemove", e => {
   const rect = canvas.getBoundingClientRect();
@@ -259,6 +268,18 @@ canvas.addEventListener("mouseup", e => {
 // chặn menu chuột phải
 canvas.addEventListener("contextmenu", e => e.preventDefault());
 
+// Nhập ký tự cho tên Cún (keypress không bị chặn bởi keydown return)
+window.addEventListener("keypress", e => {
+  if (typeof gameState !== "undefined" && gameState === STATE.DOG_NAME) {
+    if (e.key === "Enter" || e.key === "Escape") return; // đã xử lý ở keydown
+    if (e.key === "Backspace") return;
+    if (e.key.length === 1 && dogNameInput.length < 14) {
+      dogNameInput += e.key;
+    }
+    e.preventDefault();
+  }
+});
+
 // ===========================================================================
 // 16) GAME STATE -----------------------------------------------------------
 // ===========================================================================
@@ -266,6 +287,7 @@ const STATE = {
   LOADING:    "loading",     // đợi tải hết asset PNG, sau đó tự sang TITLE
   TITLE:      "title",
   NAME_INPUT: "name_input",
+  DOG_NAME:   "dog_name",    // nhập tên chú Cún
   PLAYING:    "playing",
   QUEST:      "quest",
   SHOP:       "shop",
@@ -324,12 +346,17 @@ let questFlash = 0;    // hiệu ứng nhấp nháy khi nhận / hoàn thành nh
 let questNotice = "";  // chữ thông báo nhiệm vụ ở giữa màn hình
 let noticeTimer = 0;
 let mouseClickConsumed = false;
+let companionDog = null;  // chú Cún đồng hành (null nếu chưa mua)
+let dogNameInput = "";   // chuỗi tên đang gõ cho Cún
+let dogNameCursor = 0;   // bộ đếm nhấp nháy con trỏ
+let pendingDogPrice = 0; // giá Cún đã trừ khi vào màn hình đặt tên (để refund nếu ESC)
 
 function startGame() {
   ensureAudio();              // tạo AudioContext sau khi user nhấn phím
   currentIslandIdx = 0;
   player = new Player(100, 400);
   player.name = (typedName.trim() || "Hải Tặc").slice(0, 14);
+  companionDog = null;        // reset Cún đồng hành khi bắt đầu lại
   scoreSavedThisRound = false;
   lastSavedEntry = null;
   loadIsland(0);
@@ -411,6 +438,8 @@ function update() {
     for (const n of level.npcs) n.update();
     // Thuyền
     for (const b of level.boats) b.update();
+    // Chú Cún đồng hành
+    if (companionDog) companionDog.update(level, player);
 
     // Đạn của người chơi
     for (let i = playerOrbs.length - 1; i >= 0; i--) {
@@ -515,21 +544,57 @@ function update() {
       input.esc = false;
       mouseClickConsumed = true;
     }
-    // Bắt click chuột vào card để mua
+    // ← → để chuyển tab
+    if (input.left)  { input.left = false; switchShopTab(-1); }
+    if (input.right) { input.right = false; switchShopTab(1);  }
+    // Bắt click chuột vào tab hoặc card để mua
     if (input.mouseDown && !mouseClickConsumed) {
       mouseClickConsumed = true;
-      for (let i = 0; i < SHOP_ITEMS.length; i++) {
-        const r = shopCardRect(i);
-        if (input.mouseX >= r.x && input.mouseX <= r.x + r.w &&
-            input.mouseY >= r.y && input.mouseY <= r.y + r.h) {
-          buyShopItem(SHOP_ITEMS[i]);
-          break;
+      const mx = input.mouseX, my = input.mouseY;
+      // 1) Click tab → chuyển tab
+      const clickedTab = shopTabAt(mx, my);
+      if (clickedTab && clickedTab !== shopTab) {
+        shopTab = clickedTab;
+      } else {
+        // 2) Click card trong tab hiện tại → mua
+        const items = shopTabItems();
+        for (let i = 0; i < items.length; i++) {
+          const r = shopCardRect(i);
+          if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+            buyShopItem(items[i]);
+            break;
+          }
         }
       }
     }
     if (!input.mouseDown) mouseClickConsumed = false;
     // vẫn cập nhật hạt + thông báo cho không bị đứng hình
     updateParticles();
+    if (noticeTimer > 0) noticeTimer--;
+  } else if (gameState === STATE.DOG_NAME) {
+    // Xử lý nhập tên chú Cún
+    if (input.enter) {
+      input.enter = false;
+      const name = dogNameInput.trim() || "Buddy";
+      companionDog = new CompanionDog(player.x, player.y - 30, name);
+      showNotice("Chào " + name + "! Ta cùng đi nhé!", 240);
+      sfxCoin();
+      gameState = STATE.PLAYING;
+    }
+    if (input.esc) {
+      input.esc = false;
+      // Refund vàng đã trừ khi vào màn hình tên Cún
+      player.gold += pendingDogPrice;
+      pendingDogPrice = 0;
+      gameState = STATE.SHOP;
+    }
+    if (input.bs) {
+      input.bs = false;
+      dogNameInput = dogNameInput.slice(0, -1);
+    }
+    // Nhập ký tự (chỉ ký tự đơn, không hỗ trợ IME ở đây)
+    // Xử lý ở phần keypress bên dưới
+    dogNameCursor++;
     if (noticeTimer > 0) noticeTimer--;
   } else if (gameState === STATE.LOADING) {
     // Tự chuyển sang TITLE khi tất cả asset đã tải xong (kể cả lỗi - sẽ fallback)
@@ -621,6 +686,10 @@ function draw() {
     drawNameInput();
     return;
   }
+  if (gameState === STATE.DOG_NAME) {
+    drawDogNamePanel();
+    return;
+  }
 
   // === Đang chơi / mở bảng nhiệm vụ (vẽ thế giới phía sau) ===
   drawBackground(level, camera.x);
@@ -641,6 +710,8 @@ function draw() {
   for (const o of enemyOrbs)  o.draw(camera.x, camera.y);
   // Người chơi
   player.draw(camera.x, camera.y);
+  // Chú Cún đồng hành
+  if (companionDog) companionDog.draw(camera.x, camera.y);
   // Hạt
   drawParticles(camera.x, camera.y);
 

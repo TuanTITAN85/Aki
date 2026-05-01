@@ -1,6 +1,6 @@
 "use strict";
 // =============================================================================
-// CỬA HÀNG - 12 mặt hàng (HP, mạng, 5 trái ác quỷ, 3 cấp kiếm)
+// CỬA HÀNG - 13 mặt hàng chia 4 tab (Hồi Phẩm / Trái Ác Quỷ / Kiếm / Đồng Hành)
 // Mở/đóng bằng phím E hoặc ESC. Click chuột vào thẻ để mua.
 // Trái đã sở hữu -> bấm để đổi miễn phí.
 //
@@ -16,26 +16,44 @@
 // =============================================================================
 
 const SHOP_ITEMS = [
-  { id:"hp_small",   kind:"heal",     name:"Bình Máu Nhỏ",   desc:"Hồi 30 máu",          price:20 },
-  { id:"hp_big",     kind:"heal_full",name:"Bình Máu Lớn",   desc:"Hồi đầy máu",         price:50 },
-  { id:"max_hp",     kind:"max_hp",   name:"Tăng Máu Tối Đa",desc:"+20 máu tối đa",      price:120 },
-  { id:"extra_life", kind:"life",     name:"Mạng Sống Thêm", desc:"+1 mạng",             price:300 },
-  { id:"fruit_flame",  kind:"fruit", fruit:"flame",   name:"Trái Lửa",  desc:"32 dmg, bắn nhanh",    price:80  },
-  { id:"fruit_ice",    kind:"fruit", fruit:"ice",     name:"Trái Băng", desc:"22 dmg × 2 viên",      price:120 },
-  { id:"fruit_wind",   kind:"fruit", fruit:"wind",    name:"Trái Gió",  desc:"16 dmg × 3 viên quạt", price:150 },
-  { id:"fruit_dragon", kind:"fruit", fruit:"dragon",  name:"Trái Rồng", desc:"60 dmg cực mạnh",      price:220 },
-  { id:"fruit_thunder",kind:"fruit", fruit:"thunder", name:"Trái Sét",  desc:"85 dmg, sát thương cao",price:320 },
-  { id:"sword_bronze", kind:"sword", tier:1, name:"Kiếm Đồng", desc:"+20% sát thương",  price:150 },
-  { id:"sword_silver", kind:"sword", tier:2, name:"Kiếm Bạc",  desc:"+50% sát thương",  price:380 },
-  { id:"sword_gold",   kind:"sword", tier:3, name:"Kiếm Vàng", desc:"+100% sát thương", price:800 }
+  { id:"hp_small",   kind:"heal",     name:"Bình Máu Nhỏ",   desc:"Hồi 30 máu",          price:20,  cat:"hp"    },
+  { id:"hp_big",     kind:"heal_full",name:"Bình Máu Lớn",   desc:"Hồi đầy máu",         price:50,  cat:"hp"    },
+  { id:"max_hp",     kind:"max_hp",   name:"Tăng Máu Tối Đa",desc:"+20 máu tối đa",      price:120, cat:"hp"    },
+  { id:"extra_life", kind:"life",     name:"Mạng Sống Thêm", desc:"+1 mạng",             price:300, cat:"hp"    },
+  { id:"fruit_flame",  kind:"fruit", fruit:"flame",   name:"Trái Lửa",  desc:"32 dmg, bắn nhanh",    price:80,  cat:"fruit" },
+  { id:"fruit_ice",    kind:"fruit", fruit:"ice",     name:"Trái Băng", desc:"22 dmg × 2 viên",      price:120, cat:"fruit" },
+  { id:"fruit_wind",   kind:"fruit", fruit:"wind",    name:"Trái Gió",  desc:"16 dmg × 3 viên quạt", price:150, cat:"fruit" },
+  { id:"fruit_dragon", kind:"fruit", fruit:"dragon",  name:"Trái Rồng", desc:"60 dmg cực mạnh",      price:220, cat:"fruit" },
+  { id:"fruit_thunder",kind:"fruit", fruit:"thunder", name:"Trái Sét",  desc:"85 dmg, sát thương cao",price:320, cat:"fruit" },
+  { id:"sword_bronze", kind:"sword", tier:1, name:"Kiếm Đồng", desc:"+20% sát thương",  price:150, cat:"sword" },
+  { id:"sword_silver", kind:"sword", tier:2, name:"Kiếm Bạc",  desc:"+50% sát thương",  price:380, cat:"sword" },
+  { id:"sword_gold",   kind:"sword", tier:3, name:"Kiếm Vàng", desc:"+100% sát thương", price:800, cat:"sword" },
+  { id:"companion_dog", kind:"companion", name:"Chú Cún Golden Retriever",
+    desc:"Cắn lính/thú trong phạm vi ~300px", price:200, cat:"companion" }
 ];
 
-// Bố cục lưới cửa hàng (lưu rect mỗi mục để bắt click)
+// Tab hiện tại
+let shopTab = "hp"; // "hp" | "fruit" | "sword" | "companion"
+
+// Các tab
+const SHOP_TABS = [
+  { id:"hp",         label:"Hồi Phẩm",    icon:"+",  color:"#ff6a6a" },
+  { id:"fruit",      label:"Trái Ác Quỷ", icon:"●",  color:"#d48aff" },
+  { id:"sword",      label:"Kiếm",         icon:"⚔", color:"#ffd24a" },
+  { id:"companion",   label:"Đồng Hành",   icon:"🐕", color:"#d4a050" }
+];
+
+// Bố cục cửa hàng
 const SHOP_LAYOUT = {
-  panelX: 60, panelY: 60, panelW: 1160, panelH: 600,
-  cardW: 360, cardH: 124, cols: 3, gap: 14,
-  startX: 80, startY: 160
+  panelX: 40, panelY: 24, panelW: 1200, panelH: 672,
+  headerH: 56,
+  footerH: 52,
+  cardW: 364, cardH: 130, cols: 3, gap: 14,
+  startX: 52, startY: 96,   // startY tính từ panelY, sau header
+  tabBarH: 44
 };
+
+// Rect của một card trong tab hiện tại
 function shopCardRect(idx) {
   const L = SHOP_LAYOUT;
   const col = idx % L.cols, row = Math.floor(idx / L.cols);
@@ -44,6 +62,11 @@ function shopCardRect(idx) {
     y: L.startY + row * (L.cardH + L.gap),
     w: L.cardW, h: L.cardH
   };
+}
+
+// Lấy items thuộc tab hiện tại
+function shopTabItems() {
+  return SHOP_ITEMS.filter(it => it.cat === shopTab);
 }
 
 // Mua một mặt hàng
@@ -82,6 +105,25 @@ function buyShopItem(item) {
     player.swordTier = item.tier;
     showNotice("Bạn vừa nhận " + item.name + "!", 150);
   }
+  else if (item.kind === "companion") {
+    // Chuyển sang màn hình nhập tên Cún
+    if (companionDog) {
+      showNotice("Bạn đã có Cún rồi!", 180);
+      sfxHurt();
+      return;
+    }
+    if (player.gold < item.price) {
+      showNotice("Không đủ vàng!", 180);
+      sfxHurt();
+      return;
+    }
+    gameState = STATE.DOG_NAME;
+    dogNameInput = "";
+    // Trừ vàng ngay để không bị refund khi user escape
+    player.gold -= item.price;
+    pendingDogPrice = item.price; // lưu lại để refund khi escape
+    return;
+  }
   sfxCoin();
   spawnParticles(player.x + player.w/2, player.y + player.h/2, {
     count: 18, color: "#fff5a0", speed: 4, size: 3, life: 30, shape: "star"
@@ -118,15 +160,19 @@ function drawShopIcon(item, cx, cy) {
     ctx.fillRect(cx - 22, cy - 14, 44, 28);
     drawText("1UP", cx, cy - 8, 16, "#fff", "#000", "center");
   } else if (item.kind === "fruit") {
-    const cfg = POWERS[item.fruit];
-    ctx.fillStyle = "#3a8a2a";
-    ctx.fillRect(cx - 2, cy - 24, 4, 8);           // cuống
-    ctx.fillStyle = cfg.glow;
-    ctx.beginPath(); ctx.arc(cx, cy, 18, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = cfg.color;
-    ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(cx - 6, cy - 8, 4, 4);
+    // Dùng PNG asset 44x44 căn giữa, fallback circles nếu chưa tải
+    const dispW = 48, dispH = 48;
+    if (!drawFruitImage(item.fruit, cx - dispW/2, cy - dispH/2, dispW, dispH)) {
+      const cfg = POWERS[item.fruit];
+      ctx.fillStyle = "#3a8a2a";
+      ctx.fillRect(cx - 2, cy - 24, 4, 8);
+      ctx.fillStyle = cfg.glow;
+      ctx.beginPath(); ctx.arc(cx, cy, 18, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = cfg.color;
+      ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(cx - 6, cy - 8, 4, 4);
+    }
   } else if (item.kind === "sword") {
     // kiếm với màu khác nhau theo cấp
     const colors = [null,
@@ -139,52 +185,105 @@ function drawShopIcon(item, cx, cy) {
     ctx.fillStyle = c1;        ctx.fillRect(cx - 2, cy - 22, 4, 28);
     ctx.fillStyle = "#fff";    ctx.fillRect(cx - 1, cy - 22, 1, 22);
     ctx.fillStyle = c2;        ctx.fillRect(cx - 2, cy - 24, 4, 4);
+  } else if (item.kind === "companion") {
+    // Chú Cún Golden Retriever - vẽ bằng canvas primitives
+    ctx.fillStyle = "#d4a050";
+    ctx.beginPath(); ctx.ellipse(cx, cy, 28, 18, 0, 0, Math.PI * 2); ctx.fill(); // body
+    ctx.fillStyle = "#a07030";
+    ctx.beginPath(); ctx.ellipse(cx - 8, cy, 18, 12, 0, 0, Math.PI * 2); ctx.fill(); // shadow
+    ctx.fillStyle = "#d4a050";
+    ctx.beginPath(); ctx.ellipse(cx + 22, cy - 4, 14, 12, 0, 0, Math.PI * 2); ctx.fill(); // head
+    ctx.fillStyle = "#a07030";
+    ctx.beginPath(); ctx.ellipse(cx + 14, cy - 14, 6, 8, -0.3, 0, Math.PI * 2); ctx.fill(); // ear
+    ctx.beginPath(); ctx.ellipse(cx + 26, cy - 12, 6, 8, 0.3, 0, Math.PI * 2); ctx.fill(); // ear
+    ctx.fillStyle = "#ffd6a8";
+    ctx.beginPath(); ctx.ellipse(cx + 32, cy + 2, 7, 5, 0, 0, Math.PI * 2); ctx.fill(); // snout
+    ctx.fillStyle = "#1a1a1a";
+    ctx.beginPath(); ctx.ellipse(cx + 37, cy, 3, 3, 0, 0, Math.PI * 2); ctx.fill(); // nose
+    ctx.beginPath(); ctx.arc(cx + 24, cy - 6, 3, 0, Math.PI * 2); ctx.fill(); // eye
   }
 }
 
 // Vẽ cửa hàng (mở khi bấm E)
 function drawShop() {
   // backdrop làm mờ thế giới phía sau
-  ctx.fillStyle = "rgba(8, 14, 30, 0.82)";
+  ctx.fillStyle = "rgba(8, 14, 30, 0.88)";
   ctx.fillRect(0, 0, W, H);
 
   const L = SHOP_LAYOUT;
-  // panel chính - nền phẳng, chỉ một vạch nhấn vàng ở đỉnh
+
+  // Panel chính
   ctx.fillStyle = "#141d3a";
   ctx.fillRect(L.panelX, L.panelY, L.panelW, L.panelH);
   ctx.fillStyle = "#ffd24a";
-  ctx.fillRect(L.panelX, L.panelY, L.panelW, 4);
+  ctx.fillRect(L.panelX, L.panelY, L.panelW, 4);    // vạch vàng đỉnh
 
-  // tiêu đề
+  // === Header: tiêu đề + vàng ===
+  const headerY = L.panelY + 12;
   drawText("CỬA HÀNG HẢI TẶC",
-    L.panelX + L.panelW/2, L.panelY + 24, 30, "#ffd24a", "#000", "center");
-  drawText("Vàng của bạn: " + player.gold,
-    L.panelX + 30, L.panelY + 78, 20, "#ffe18a", "#000", "left");
-  drawText("Bấm E hoặc ESC để đóng",
-    L.panelX + L.panelW - 30, L.panelY + 80, 16, "#8ea6c8", "#000", "right");
+    L.panelX + L.panelW/2, headerY + 16, 30, "#ffd24a", "#000", "center");
+  drawText("💰 " + player.gold,
+    L.panelX + L.panelW - 20, headerY + 16, 22, "#fff5a0", "#000", "right");
 
-  // các thẻ hàng
-  for (let i = 0; i < SHOP_ITEMS.length; i++) {
-    const it = SHOP_ITEMS[i];
+  // === Tab bar ===
+  const tabBarY = L.panelY + L.headerH;
+  ctx.fillStyle = "#0e1530";
+  ctx.fillRect(L.panelX, tabBarY, L.panelW, L.tabBarH);
+
+  const tabCount = SHOP_TABS.length;
+  const tabW = (L.panelW - 32) / tabCount;
+  for (let i = 0; i < tabCount; i++) {
+    const tab = SHOP_TABS[i];
+    const tx = L.panelX + 16 + i * tabW;
+    const active = shopTab === tab.id;
+    const hover = (input.mouseX >= tx && input.mouseX <= tx + tabW &&
+                   input.mouseY >= tabBarY && input.mouseY <= tabBarY + L.tabBarH);
+
+    // Nền tab
+    ctx.fillStyle = active ? tab.color + "33" : (hover ? "#ffffff11" : "transparent");
+    ctx.fillRect(tx + 2, tabBarY + 4, tabW - 4, L.tabBarH - 8);
+
+    // Vạch dưới tab đang active
+    if (active) {
+      ctx.fillStyle = tab.color;
+      ctx.fillRect(tx + 2, tabBarY + L.tabBarH - 4, tabW - 4, 4);
+    }
+
+    // Icon + tên tab
+    const labelCol = active ? tab.color : (hover ? "#fff" : "#8ea6c8");
+    drawText(tab.label, tx + tabW/2, tabBarY + L.tabBarH/2, 17, labelCol, "#000", "center");
+  }
+
+  // === Item cards ===
+  const items = shopTabItems();
+  const contentTop = tabBarY + L.tabBarH + 12;
+  const contentBottom = L.panelY + L.panelH - L.footerH - 8;
+  const maxRows = Math.floor((contentBottom - contentTop) / (L.cardH + L.gap));
+  const rows = Math.min(maxRows, Math.ceil(items.length / L.cols));
+
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
     const r  = shopCardRect(i);
 
     const enough     = player.gold >= it.price;
     const ownedFruit = it.kind === "fruit" && player.inventory.includes(it.fruit);
     const activeFruit= it.kind === "fruit" && player.power === it.fruit;
     const ownedSword = it.kind === "sword" && player.swordTier >= it.tier;
+    const ownedCompanion = it.kind === "companion" && companionDog;
 
     // hover (chuột nằm trong)
     const hover = (input.mouseX >= r.x && input.mouseX <= r.x + r.w &&
                    input.mouseY >= r.y && input.mouseY <= r.y + r.h);
 
-    // nền card phẳng - không viền, chỉ một vạch màu mỏng phía trái để báo trạng thái
+    // nền card phẳng - vạch màu mỏng phía trái báo trạng thái
     let bgCol  = "#1c264a";
     let accent = "#3a4a78";
-    if (activeFruit)      { bgCol = "#1f3a2a"; accent = "#5dd968"; }
-    else if (ownedFruit)  { bgCol = "#1c3548"; accent = "#5dccff"; }
-    else if (ownedSword)  { bgCol = "#1f3a2a"; accent = "#5dd968"; }
-    else if (!enough)     { accent = "#3a3a3a"; }
-    if (hover && !activeFruit) {
+    if (activeFruit)        { bgCol = "#1f3a2a"; accent = "#5dd968"; }
+    else if (ownedFruit)   { bgCol = "#1c3548"; accent = "#5dccff"; }
+    else if (ownedSword)    { bgCol = "#1f3a2a"; accent = "#5dd968"; }
+    else if (ownedCompanion){ bgCol = "#1f3a2a"; accent = "#5dd968"; }
+    else if (!enough)       { accent = "#3a3a3a"; }
+    if (hover && !activeFruit && !ownedCompanion) {
       bgCol  = ownedFruit ? "#1f4258" : "#22305c";
       accent = ownedFruit ? "#7ad4ff" : "#ffd24a";
     }
@@ -192,20 +291,20 @@ function drawShop() {
     ctx.fillStyle = bgCol;
     ctx.fillRect(r.x, r.y, r.w, r.h);
     ctx.fillStyle = accent;
-    ctx.fillRect(r.x, r.y, 4, r.h);
+    ctx.fillRect(r.x, r.y, 4, r.h);  // vạch trái
 
     // icon
-    drawShopIcon(it, r.x + 50, r.y + r.h/2);
+    drawShopIcon(it, r.x + 48, r.y + r.h/2);
 
-    // tên + mô tả (tự co cỡ chữ nếu quá dài để khỏi tràn ra ngoài thẻ)
-    const textMaxW = r.w - 120;
-    let nameSize = 20;
+    // tên + mô tả
+    const textMaxW = r.w - 110;
+    let nameSize = 19;
     ctx.font = `bold ${nameSize}px sans-serif`;
     while (ctx.measureText(it.name).width > textMaxW && nameSize > 14) {
-      nameSize--;
-      ctx.font = `bold ${nameSize}px sans-serif`;
+      nameSize--; ctx.font = `bold ${nameSize}px sans-serif`;
     }
-    drawText(it.name, r.x + 100, r.y + 12, nameSize, "#ffd24a", "#000");
+    drawText(it.name, r.x + 94, r.y + 18, nameSize, "#ffd24a", "#000");
+
     let descSize = 13;
     ctx.font = `bold ${descSize}px sans-serif`;
     let desc = it.desc;
@@ -213,28 +312,52 @@ function drawShop() {
       desc = desc.slice(0, -1);
     }
     if (desc !== it.desc) desc = desc.slice(0, -1) + "…";
-    drawText(desc, r.x + 100, r.y + 40, descSize, "#fff", "#000");
+    drawText(desc, r.x + 94, r.y + 44, descSize, "#ccc", "#000");
 
     // dòng trạng thái + giá
     if (activeFruit) {
-      drawText("ĐANG DÙNG", r.x + r.w - 14, r.y + r.h - 32, 18, "#7afc6e", "#000", "right");
+      drawText("ĐANG DÙNG", r.x + r.w - 14, r.y + r.h - 28, 18, "#7afc6e", "#000", "right");
     } else if (ownedFruit) {
-      drawText("Bấm để đổi (miễn phí)", r.x + 100, r.y + r.h - 26, 13, "#7ad4ff", "#000");
-      drawText("ĐÃ CÓ", r.x + r.w - 14, r.y + r.h - 32, 16, "#7ad4ff", "#000", "right");
+      drawText("ĐÃ CÓ · Miễn phí đổi", r.x + r.w - 14, r.y + r.h - 28, 16, "#7ad4ff", "#000", "right");
     } else if (ownedSword) {
-      drawText("ĐÃ CÓ", r.x + r.w - 14, r.y + r.h - 32, 18, "#7afc6e", "#000", "right");
+      drawText("ĐÃ CÓ", r.x + r.w - 14, r.y + r.h - 28, 18, "#7afc6e", "#000", "right");
+    } else if (ownedCompanion) {
+      drawText("ĐÃ CÓ", r.x + r.w - 14, r.y + r.h - 28, 18, "#7afc6e", "#000", "right");
     } else {
       const priceCol = enough ? "#fff5a0" : "#ff6a6a";
-      drawText(it.price + " 💰", r.x + r.w - 14, r.y + r.h - 32, 20, priceCol, "#000", "right");
-      drawText(enough ? "[Bấm để mua]" : "[Thiếu vàng]",
-               r.x + 100, r.y + r.h - 26, 13, enough ? "#7afc6e" : "#ff6a6a", "#000");
+      drawText(it.price + " 💰", r.x + r.w - 14, r.y + r.h - 28, 22, priceCol, "#000", "right");
+      drawText(enough ? "[Bấm mua]" : "[Thiếu vàng]",
+               r.x + 94, r.y + r.h - 28, 13, enough ? "#7afc6e" : "#ff6a6a", "#000");
     }
   }
 
-  // thông báo nổi (nếu có)
+  // === Footer ===
+  const footerY = L.panelY + L.panelH - L.footerH;
+  ctx.fillStyle = "#0e1530";
+  ctx.fillRect(L.panelX, footerY, L.panelW, L.footerH);
+  drawText("Bấm E hoặc ESC để đóng cửa hàng",
+    L.panelX + L.panelW/2, footerY + L.footerH/2, 16, "#8ea6c8", "#000", "center");
+
+  // Thông báo nổi (nếu có)
   if (noticeTimer > 0 && questNotice) {
-    ctx.fillStyle = "rgba(0,0,0,0.7)";
-    ctx.fillRect(W/2 - 360, L.panelY + L.panelH - 56, 720, 44);
-    drawText(questNotice, W/2, L.panelY + L.panelH - 48, 20, "#fff", "#000", "center");
+    const notY = L.panelY + L.panelH - L.footerH - 52;
+    ctx.fillStyle = "rgba(0,0,0,0.82)";
+    ctx.fillRect(W/2 - 400, notY, 800, 44);
+    drawText(questNotice, W/2, notY + 22, 20, "#fff", "#000", "center");
   }
+}
+
+// Click handler cho tab — trả về tab id nếu click vào tab, null otherwise
+function shopTabAt(x, y) {
+  const L = SHOP_LAYOUT;
+  const tabBarY = L.panelY + L.headerH;
+  const tabCount = SHOP_TABS.length;
+  const tabW = (L.panelW - 32) / tabCount;
+  if (y >= tabBarY && y <= tabBarY + L.tabBarH) {
+    for (let i = 0; i < tabCount; i++) {
+      const tx = L.panelX + 16 + i * tabW;
+      if (x >= tx && x <= tx + tabW) return SHOP_TABS[i].id;
+    }
+  }
+  return null;
 }

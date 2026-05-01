@@ -402,3 +402,44 @@ function drawGuardSpriteFrame(state, animTime, dx, dy, dw, dh, flip) {
   }
   return true;
 }
+
+// =============================================================================
+// ẢNH TRÁI ÁC QUỶ - 5 PNG riêng biệt (1024x1024 mỗi cái, đã transparent)
+// Dùng cho: Item.draw() khi kind="fruit", drawShopIcon() khi kind="fruit",
+// và HUD icon khi đang dùng power (nếu sau muốn).
+// =============================================================================
+const FRUIT_IMAGES = {
+  dragon:  { src: "assets/item_dragon.png",  image: null, ready: false },
+  flame:   { src: "assets/item_flame.png",   image: null, ready: false },
+  ice:     { src: "assets/item_ice.png",     image: null, ready: false },
+  thunder: { src: "assets/item_thunder.png", image: null, ready: false },
+  wind:    { src: "assets/item_wind.png",    image: null, ready: false }
+};
+
+function loadFruitImages() {
+  for (const key of Object.keys(FRUIT_IMAGES)) {
+    const cfg = FRUIT_IMAGES[key];
+    AssetLoader.expect();
+    const img = new Image();
+    img.onload = () => {
+      cfg.image = img;
+      cfg.ready = true;
+      AssetLoader.done(true);
+    };
+    img.onerror = () => {
+      console.warn("Không tải được:", cfg.src);
+      AssetLoader.done(false);
+    };
+    img.src = cfg.src;
+  }
+}
+loadFruitImages();
+
+// Vẽ 1 trái ác quỷ tại (dx, dy) với kích thước (dw, dh)
+// Trả về true nếu vẽ được, false nếu ảnh chưa tải xong (caller fallback)
+function drawFruitImage(fruit, dx, dy, dw, dh) {
+  const cfg = FRUIT_IMAGES[fruit];
+  if (!cfg || !cfg.ready) return false;
+  ctx.drawImage(cfg.image, dx, dy, dw, dh);
+  return true;
+}

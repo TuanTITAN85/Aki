@@ -220,68 +220,92 @@ const PIRATE_JUMP = [
 ];
 
 // =============================================================================
-// SPRITE SHEET MỚI cho hải tặc (PNG từ assets/)
-// Mỗi animation là 1 file: các frame xếp ngang, kích thước bằng nhau.
-// Background trắng được chuyển thành alpha=0 ngay khi tải (chroma key).
+// SPRITE SHEET CỦA HẢI TẶC - 1 file PNG duy nhất chứa 4x4 = 16 frame
+//   Hàng 0: idle  (4 frame)
+//   Hàng 1: run   (4 frame)
+//   Hàng 2: jump  (4 frame)
+//   Hàng 3: shoot (4 frame, chưa dùng - giữ sẵn cho mở rộng tương lai)
 //
-// Trong Player.draw(): nếu sprite đã tải xong -> dùng ctx.drawImage,
-// ngược lại fallback về PIRATE_IDLE_*/PIRATE_RUN_*/PIRATE_JUMP pixel matrix.
-// State "jump" hiện tại chưa có asset PNG -> luôn dùng pixel matrix cũ.
+// Background magenta được tự động loại bỏ (chroma key) khi tải.
+// Trong Player.draw(): nếu sprite đã ready -> ctx.drawImage,
+// ngược lại fallback về pixel matrix cũ (PIRATE_IDLE_*/RUN_*/JUMP).
 // =============================================================================
-const PIRATE_SPRITES = {
-  idle: { src: "assets/pirate_idle.png", frameW: 400, frameH: 397, count: 4, image: null, ready: false },
-  run:  { src: "assets/pirate_run.png",  frameW: 400, frameH: 397, count: 4, image: null, ready: false }
+const PIRATE_SHEET = {
+  src: "assets/pirate_sprite.png",
+  cols: 4, rows: 4,
+  // Định nghĩa từng state: hàng nào, số frame, tốc độ đổi
+  states: {
+    idle:  { row: 0, frames: 4, rate: 12 },   // chậm, hơi nhún
+    run:   { row: 1, frames: 4, rate: 6  },   // chạy nhanh
+    jump:  { row: 2, frames: 4, rate: 8  },
+    shoot: { row: 3, frames: 4, rate: 5  }
+  },
+  image: null,
+  ready: false,
+  frameW: 0,        // tính sau khi tải (= imageWidth / cols)
+  frameH: 0
 };
 
-// Tải ảnh + chroma key trắng -> alpha=0 (Gemini xuất background trắng đặc)
-function loadPirateSprites() {
-  for (const key of Object.keys(PIRATE_SPRITES)) {
-    const cfg = PIRATE_SPRITES[key];
-    const img = new Image();
-    img.onload = () => {
-      // Vẽ image lên canvas tạm để xử lý pixel
-      const c = document.createElement("canvas");
-      c.width = img.width;
-      c.height = img.height;
-      const cx = c.getContext("2d");
-      cx.drawImage(img, 0, 0);
-      const data = cx.getImageData(0, 0, c.width, c.height);
-      const px = data.data;
-      // Pixel gần trắng (>240 ở cả 3 kênh) -> trong suốt
-      for (let i = 0; i < px.length; i += 4) {
-        if (px[i] > 240 && px[i+1] > 240 && px[i+2] > 240) {
-          px[i+3] = 0;
-        }
-      }
-      cx.putImageData(data, 0, 0);
-      cfg.image = c;          // dùng canvas đã alpha hoá thay cho image gốc
-      cfg.ready = true;
-    };
-    img.onerror = () => {
-      console.warn("Không tải được sprite:", cfg.src,
-                   "- player sẽ dùng pixel matrix cũ");
-      cfg.ready = false;
-    };
-    img.src = cfg.src;
+// Chroma key: pixel có màu gần với góc trên trái (background) -> alpha=0
+// Cách này tổng quát, không cần biết bg màu gì sẵn (magenta/trắng/xanh đều xài được).
+function chromaKey(canvas, threshold = 35) {
+  const cx = canvas.getContext("2d");
+  const data = cx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = data.data;
+  // Đọc pixel góc (0,0) làm màu nền tham chiếu
+  const bgR = px[0], bgG = px[1], bgB = px[2];
+  for (let i = 0; i < px.length; i += 4) {
+    const dr = Math.abs(px[i]   - bgR);
+    const dg = Math.abs(px[i+1] - bgG);
+    const db = Math.abs(px[i+2] - bgB);
+    if (dr < threshold && dg < threshold && db < threshold) {
+      px[i+3] = 0;
+    }
   }
+  cx.putImageData(data, 0, 0);
 }
-loadPirateSprites();
 
-// Vẽ 1 frame của sprite hải tặc. Trả về true nếu vẽ thành công, false nếu
-// sprite chưa tải xong (caller nên fallback sang pixel matrix).
-function drawPirateSpriteFrame(state, frameIdx, dx, dy, dw, dh, flip) {
-  const cfg = PIRATE_SPRITES[state];
-  if (!cfg || !cfg.ready) return false;
-  const sx = (frameIdx % cfg.count) * cfg.frameW;
-  const sy = 0;
+function loadPirateSheet() {
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = img.width;
+    c.height = img.height;
+    const cx = c.getContext("2d");
+    cx.drawImage(img, 0, 0);
+    chromaKey(c);                  // loại bg magenta
+    PIRATE_SHEET.image = c;
+    PIRATE_SHEET.frameW = img.width  / PIRATE_SHEET.cols;
+    PIRATE_SHEET.frameH = img.height / PIRATE_SHEET.rows;
+    PIRATE_SHEET.ready = true;
+  };
+  img.onerror = () => {
+    console.warn("Không tải được sprite sheet:", PIRATE_SHEET.src,
+                 "- player sẽ dùng pixel matrix cũ");
+  };
+  img.src = PIRATE_SHEET.src;
+}
+loadPirateSheet();
+
+// Vẽ 1 frame theo state + animTime. Trả về true nếu vẽ được, false nếu sprite
+// chưa tải xong (caller fallback sang pixel matrix).
+function drawPirateSpriteFrame(state, animTime, dx, dy, dw, dh, flip) {
+  if (!PIRATE_SHEET.ready) return false;
+  const cfg = PIRATE_SHEET.states[state];
+  if (!cfg) return false;
+  const idx = Math.floor(animTime / cfg.rate) % cfg.frames;
+  const sx = idx     * PIRATE_SHEET.frameW;
+  const sy = cfg.row * PIRATE_SHEET.frameH;
+  const sw = PIRATE_SHEET.frameW;
+  const sh = PIRATE_SHEET.frameH;
   if (flip) {
     ctx.save();
     ctx.translate(dx + dw, dy);
     ctx.scale(-1, 1);
-    ctx.drawImage(cfg.image, sx, sy, cfg.frameW, cfg.frameH, 0, 0, dw, dh);
+    ctx.drawImage(PIRATE_SHEET.image, sx, sy, sw, sh, 0, 0, dw, dh);
     ctx.restore();
   } else {
-    ctx.drawImage(cfg.image, sx, sy, cfg.frameW, cfg.frameH, dx, dy, dw, dh);
+    ctx.drawImage(PIRATE_SHEET.image, sx, sy, sw, sh, dx, dy, dw, dh);
   }
   return true;
 }

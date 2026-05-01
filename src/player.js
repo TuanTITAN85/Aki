@@ -177,16 +177,13 @@ class Player {
     const dx = this.x - camX - (displayW - this.w) / 2;
     const dy = this.y - camY - (displayH - this.h);
 
-    // Ưu tiên sprite sheet PNG nếu đã tải xong
-    if (this.state === "idle") {
-      const idx = Math.floor(this.animTime / 12) % 4;   // 4 frame, đổi mỗi 12 tick
-      if (drawPirateSpriteFrame("idle", idx, dx, dy, displayW, displayH, flip)) return;
-    } else if (this.state === "run") {
-      const idx = Math.floor(this.animTime / 6) % 4;    // 4 frame, đổi mỗi 6 tick
-      if (drawPirateSpriteFrame("run", idx, dx, dy, displayW, displayH, flip)) return;
+    // Ưu tiên sprite sheet PNG nếu đã tải xong (idle / run / jump đều có asset)
+    if (drawPirateSpriteFrame(this.state, this.animTime,
+                              dx, dy, displayW, displayH, flip)) {
+      return;
     }
 
-    // Fallback (state=jump hoặc sprite chưa tải xong): pixel matrix cũ
+    // Fallback (sprite chưa tải xong / state lạ): pixel matrix cũ
     let grid;
     if (this.state === "jump") grid = PIRATE_JUMP;
     else if (this.state === "run") {

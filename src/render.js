@@ -443,3 +443,88 @@ function drawFruitImage(fruit, dx, dy, dw, dh) {
   ctx.drawImage(cfg.image, dx, dy, dw, dh);
   return true;
 }
+
+// =============================================================================
+// SPRITE SHEET BOSS - mỗi boss 1 file PNG, 4x4 grid (idle/walk/charge/attack)
+// Cấu trúc dictionary để dễ thêm boss mới (chỉ cần thêm 1 entry).
+// =============================================================================
+const BOSS_SHEETS = {
+  monkey_king: {
+    src: "assets/boss_monkey_king.png",
+    cols: 4, rows: 4,
+    states: {
+      idle:   { row: 0, frames: 4, rate: 12 },
+      walk:   { row: 1, frames: 4, rate: 8  },
+      charge: { row: 2, frames: 4, rate: 6  },
+      attack: { row: 3, frames: 4, rate: 5  }
+    },
+    image: null, ready: false, frameW: 0, frameH: 0
+  }
+  // TODO: giant_scorpion, yeti, fire_tiger, dark_king (khi có asset)
+};
+
+function loadBossSheets() {
+  for (const key of Object.keys(BOSS_SHEETS)) {
+    const sheet = BOSS_SHEETS[key];
+    AssetLoader.expect();
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = img.width;
+      c.height = img.height;
+      const cx = c.getContext("2d");
+      cx.drawImage(img, 0, 0);
+      chromaKey(c);                   // loại bg magenta
+      sheet.image  = c;
+      sheet.frameW = img.width  / sheet.cols;
+      sheet.frameH = img.height / sheet.rows;
+      sheet.ready  = true;
+      AssetLoader.done(true);
+    };
+    img.onerror = () => {
+      console.warn("Không tải được boss sheet:", sheet.src,
+                   "- boss sẽ vẽ bằng shapes thủ công");
+      AssetLoader.done(false);
+    };
+    img.src = sheet.src;
+  }
+}
+loadBossSheets();
+
+// Vẽ 1 frame của boss. Tự tính displayW/H giữ aspect source frame, render
+// lớn hơn collision box, "feet" đáy aligned với đáy collision.
+//   bossKind: "monkey_king" | "giant_scorpion" | ...
+//   state:    "idle" | "walk" | "charge" | "attack"
+//   b:        Enemy instance (cần x, y, w, h, facing)
+// Trả về false nếu sheet chưa sẵn sàng - caller fallback sang draw shapes.
+function drawBossSpriteFrame(bossKind, state, animTime, b, camX, camY) {
+  const sheet = BOSS_SHEETS[bossKind];
+  if (!sheet || !sheet.ready) return false;
+  const cfg = sheet.states[state];
+  if (!cfg) return false;
+
+  // Render lớn hơn collision box 1.6x theo chiều cao, giữ aspect source
+  const aspectRatio = sheet.frameW / sheet.frameH;
+  const displayH = b.h * 1.6;
+  const displayW = displayH * aspectRatio;
+  const dx = (b.x + b.w/2) - displayW/2 - camX;
+  const dy = (b.y + b.h)   - displayH    - camY;
+
+  const idx = Math.floor(animTime / cfg.rate) % cfg.frames;
+  const sx = idx     * sheet.frameW;
+  const sy = cfg.row * sheet.frameH;
+  const flip = b.facing === -1;
+
+  if (flip) {
+    ctx.save();
+    ctx.translate(dx + displayW, dy);
+    ctx.scale(-1, 1);
+    ctx.drawImage(sheet.image, sx, sy, sheet.frameW, sheet.frameH,
+                  0, 0, displayW, displayH);
+    ctx.restore();
+  } else {
+    ctx.drawImage(sheet.image, sx, sy, sheet.frameW, sheet.frameH,
+                  dx, dy, displayW, displayH);
+  }
+  return true;
+}

@@ -43,19 +43,22 @@ const SHOP_TABS = [
   { id:"companion",   label:"Đồng Hành",   icon:"🐕", color:"#d4a050" }
 ];
 
-// Bố cục cửa hàng
+// Bố cục cửa hàng (tất cả tọa độ canvas tuyệt đối)
 const SHOP_LAYOUT = {
   panelX: 40, panelY: 24, panelW: 1200, panelH: 672,
-  headerH: 56,
-  footerH: 52,
-  tabBarH: 44,
-  cardW: 364, cardH: 116, cols: 3, gap: 14,
-  startX: 52
+
+  titleY: 50,     // canvas y của title (baseline)
+  goldY: 68,      // canvas y của dòng vàng (baseline)
+
+  tabBarY: 88,    // canvas y bắt đầu tab bar
+  tabBarH: 44,    // chiều cao tab bar
+
+  footerY: 664,   // canvas y bắt đầu footer
+
+  cardW: 364, cardH: 118, cols: 3, gap: 14,
+  startX: 56,     // canvas x bắt đầu card
+  startY: 148    // canvas y bắt đầu card row đầu tiên
 };
-// startY tính động: sau header + tab bar + gap
-Object.defineProperty(SHOP_LAYOUT, "startY", {
-  get: function() { return this.panelY + this.headerH + this.tabBarH + 12; }
-});
 
 // Rect của một card trong tab hiện tại
 function shopCardRect(idx) {
@@ -222,48 +225,47 @@ function drawShop() {
   ctx.fillStyle = "#ffd24a";
   ctx.fillRect(L.panelX, L.panelY, L.panelW, 4);    // vạch vàng đỉnh
 
-  // === Header: tiêu đề + vàng ===
-  const headerY = L.panelY + 12;
+  // === Header: tiêu đề ===
   drawText("CỬA HÀNG HẢI TẶC",
-    L.panelX + L.panelW/2, headerY + 16, 30, "#ffd24a", "#000", "center");
+    L.panelX + L.panelW/2, L.titleY, 30, "#ffd24a", "#000", "center");
   drawText("💰 " + player.gold,
-    L.panelX + L.panelW - 20, headerY + 16, 22, "#fff5a0", "#000", "right");
+    L.panelX + L.panelW - 30, L.goldY, 22, "#fff5a0", "#000", "right");
 
-  // === Tab bar ===
-  const tabBarY = L.panelY + L.headerH;
-  ctx.fillStyle = "#0e1530";
-  ctx.fillRect(L.panelX, tabBarY, L.panelW, L.tabBarH);
-
+  // === Tab bar (tách biệt khỏi header) ===
   const tabCount = SHOP_TABS.length;
-  const tabW = (L.panelW - 32) / tabCount;
+  const tabW = (L.panelW - 40) / tabCount;
+  // Nền tab bar - dùng màu nhạt hơn panel để phân biệt
+  ctx.fillStyle = "#1a2448";
+  ctx.fillRect(L.panelX, L.tabBarY, L.panelW, L.tabBarH);
+  // Vạch phân cách tab bar vs header
+  ctx.fillStyle = "#ffd24a44";
+  ctx.fillRect(L.panelX, L.tabBarY - 2, L.panelW, 2);
+
   for (let i = 0; i < tabCount; i++) {
     const tab = SHOP_TABS[i];
-    const tx = L.panelX + 16 + i * tabW;
+    const tx = L.panelX + 20 + i * tabW;
     const active = shopTab === tab.id;
     const hover = (input.mouseX >= tx && input.mouseX <= tx + tabW &&
-                   input.mouseY >= tabBarY && input.mouseY <= tabBarY + L.tabBarH);
+                   input.mouseY >= L.tabBarY && input.mouseY <= L.tabBarY + L.tabBarH);
 
     // Nền tab
-    ctx.fillStyle = active ? tab.color + "33" : (hover ? "#ffffff11" : "transparent");
-    ctx.fillRect(tx + 2, tabBarY + 4, tabW - 4, L.tabBarH - 8);
+    ctx.fillStyle = active ? tab.color + "40" : (hover ? tab.color + "20" : "transparent");
+    ctx.fillRect(tx + 2, L.tabBarY + 4, tabW - 4, L.tabBarH - 8);
 
     // Vạch dưới tab đang active
     if (active) {
       ctx.fillStyle = tab.color;
-      ctx.fillRect(tx + 2, tabBarY + L.tabBarH - 4, tabW - 4, 4);
+      ctx.fillRect(tx + 2, L.tabBarY + L.tabBarH - 4, tabW - 4, 4);
     }
 
-    // Icon + tên tab
-    const labelCol = active ? tab.color : (hover ? "#fff" : "#8ea6c8");
-    drawText(tab.label, tx + tabW/2, tabBarY + L.tabBarH/2, 17, labelCol, "#000", "center");
+    // Tên tab
+    const labelCol = active ? "#fff" : (hover ? "#ddd" : "#7a8aaa");
+    drawText(tab.label, tx + tabW/2, L.tabBarY + L.tabBarH/2 + 6, 18, labelCol, "#000", "center");
   }
 
   // === Item cards ===
   const items = shopTabItems();
-  const contentTop = tabBarY + L.tabBarH + 12;
-  const contentBottom = L.panelY + L.panelH - L.footerH - 8;
-  const maxRows = Math.min(3, Math.floor((contentBottom - contentTop) / (L.cardH + L.gap)));
-  const maxItems = maxRows * L.cols;  // giới hạn items vẽ được
+  const maxItems = 9;  // tối đa 3 rows × 3 cols
 
   for (let i = 0; i < Math.min(items.length, maxItems); i++) {
     const it = items[i];
@@ -336,15 +338,14 @@ function drawShop() {
   }
 
   // === Footer ===
-  const footerY = L.panelY + L.panelH - L.footerH;
-  ctx.fillStyle = "#0e1530";
-  ctx.fillRect(L.panelX, footerY, L.panelW, L.footerH);
+  ctx.fillStyle = "#1a2448";
+  ctx.fillRect(L.panelX, L.footerY, L.panelW, 56);
   drawText("Bấm E hoặc ESC để đóng cửa hàng",
-    L.panelX + L.panelW/2, footerY + L.footerH/2, 16, "#8ea6c8", "#000", "center");
+    L.panelX + L.panelW/2, L.footerY + 32, 16, "#8ea6c8", "#000", "center");
 
-  // Thông báo nổi (nếu có)
+  // Thông báo nổi (nếu có) - trước footer
   if (noticeTimer > 0 && questNotice) {
-    const notY = L.panelY + L.panelH - L.footerH - 52;
+    const notY = L.footerY - 52;
     ctx.fillStyle = "rgba(0,0,0,0.82)";
     ctx.fillRect(W/2 - 400, notY, 800, 44);
     drawText(questNotice, W/2, notY + 22, 20, "#fff", "#000", "center");
@@ -354,12 +355,11 @@ function drawShop() {
 // Click handler cho tab — trả về tab id nếu click vào tab, null otherwise
 function shopTabAt(x, y) {
   const L = SHOP_LAYOUT;
-  const tabBarY = L.panelY + L.headerH;
   const tabCount = SHOP_TABS.length;
-  const tabW = (L.panelW - 32) / tabCount;
-  if (y >= tabBarY && y <= tabBarY + L.tabBarH) {
+  const tabW = (L.panelW - 40) / tabCount;
+  if (y >= L.tabBarY && y <= L.tabBarY + L.tabBarH) {
     for (let i = 0; i < tabCount; i++) {
-      const tx = L.panelX + 16 + i * tabW;
+      const tx = L.panelX + 20 + i * tabW;
       if (x >= tx && x <= tx + tabW) return SHOP_TABS[i].id;
     }
   }

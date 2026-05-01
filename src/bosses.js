@@ -21,8 +21,30 @@
 //                 hàm vẽ và hàm kỹ năng cho từng loại boss
 // =============================================================================
 
+// Chọn animation state cho boss dựa trên trạng thái AI:
+//   !aggro                                -> "idle" (calm)
+//   shootCD vừa reset (mới fire skill)    -> "attack" (animation đánh)
+//   shootCD vừa thấp hơn 1 chút           -> "charge" (windup chuẩn bị)
+//   aggro && đang di chuyển               -> "walk" (đuổi player)
+//   aggro && đứng yên                     -> "idle"
+function pickBossAnimState(b) {
+  if (!b.aggro) return "idle";
+  const bk = BOSS_KINDS[b.bossKind];
+  const cdMax = (bk && bk.cooldown) || 60;
+  if (b.shootCD > cdMax - 12) return "attack";
+  if (b.shootCD > cdMax - 24) return "charge";
+  if (Math.abs(b.vx) > 0.3)   return "walk";
+  return "idle";
+}
+
 // ----- Hàm vẽ Vua Khỉ Đỏ (Đảo 1) -----
 function drawMonkeyKing(b, camX, camY) {
+  // Ưu tiên sprite PNG nếu đã tải xong
+  if (drawBossSpriteFrame("monkey_king", pickBossAnimState(b),
+                          b.animTime, b, camX, camY)) {
+    return;
+  }
+  // Fallback: vẽ shapes thủ công (code cũ)
   const x = b.x - camX, y = b.y - camY;
   const w = b.w, h = b.h;
   const t = b.animTime;

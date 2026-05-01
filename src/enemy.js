@@ -285,9 +285,29 @@ class Enemy {
     }
 
     if (this.kind === "guard") {
-      const grid = (Math.floor(this.animTime / 8) % 2 === 0) ? GUARD_BODY_1 : GUARD_BODY_2;
+      // Ưu tiên sprite sheet PNG nếu đã tải xong
       const flip = this.facing === -1;
-      drawPixelSprite(grid, GUARD_PALETTE, this.x - camX, this.y - camY, 3, flip);
+      const displayW = 48, displayH = 72;     // lớn hơn collision box 36x48 cho rõ chi tiết
+      const dx = this.x - camX - (displayW - this.w) / 2;
+      const dy = this.y - camY - (displayH - this.h);
+      // Chọn animation state từ trạng thái enemy:
+      //   attackCD vừa reset (mới đánh xong) -> attack swing
+      //   aggro -> chase với kiếm giơ cao
+      //   moving + !aggro -> walk patrol
+      //   stationary -> idle
+      let animState;
+      if (this.attackCD > 30) animState = "attack";       // ngay sau khi đánh
+      else if (this.aggro)    animState = "aggro";
+      else if (Math.abs(this.vx) > 0.3) animState = "walk";
+      else                    animState = "idle";
+      if (drawGuardSpriteFrame(animState, this.animTime,
+                               dx, dy, displayW, displayH, flip)) {
+        // OK, vẽ xong
+      } else {
+        // Fallback pixel matrix cũ khi sprite chưa sẵn sàng
+        const grid = (Math.floor(this.animTime / 8) % 2 === 0) ? GUARD_BODY_1 : GUARD_BODY_2;
+        drawPixelSprite(grid, GUARD_PALETTE, this.x - camX, this.y - camY, 3, flip);
+      }
     } else if (this.kind === "beast") {
       const grid = (Math.floor(this.animTime / 8) % 2 === 0) ? BEAST_BODY_1 : BEAST_BODY_2;
       const pal = makeBeastPalette(this.theme);

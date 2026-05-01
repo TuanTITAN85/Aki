@@ -337,3 +337,68 @@ function drawPirateSpriteFrame(state, animTime, dx, dy, dw, dh, flip) {
   }
   return true;
 }
+
+// =============================================================================
+// SPRITE SHEET CỦA LÍNH CANH - 4x4 grid: idle / walk / aggro / attack
+// Cùng pattern với PIRATE_SHEET, dùng cho class Enemy khi kind="guard".
+// =============================================================================
+const GUARD_SHEET = {
+  src: "assets/guard_sprite.png",
+  cols: 4, rows: 4,
+  states: {
+    idle:   { row: 0, frames: 4, rate: 14 },   // đứng yên cảnh giới
+    walk:   { row: 1, frames: 4, rate: 8  },   // tuần tra (đi bộ)
+    aggro:  { row: 2, frames: 4, rate: 6  },   // đuổi player, kiếm giơ cao
+    attack: { row: 3, frames: 4, rate: 5  }    // đánh kiếm
+  },
+  image: null,
+  ready: false,
+  frameW: 0,
+  frameH: 0
+};
+
+function loadGuardSheet() {
+  AssetLoader.expect();
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = img.width;
+    c.height = img.height;
+    const cx = c.getContext("2d");
+    cx.drawImage(img, 0, 0);
+    chromaKey(c);                  // loại bg magenta
+    GUARD_SHEET.image = c;
+    GUARD_SHEET.frameW = img.width  / GUARD_SHEET.cols;
+    GUARD_SHEET.frameH = img.height / GUARD_SHEET.rows;
+    GUARD_SHEET.ready = true;
+    AssetLoader.done(true);
+  };
+  img.onerror = () => {
+    console.warn("Không tải được:", GUARD_SHEET.src,
+                 "- guard sẽ dùng pixel matrix cũ");
+    AssetLoader.done(false);
+  };
+  img.src = GUARD_SHEET.src;
+}
+loadGuardSheet();
+
+function drawGuardSpriteFrame(state, animTime, dx, dy, dw, dh, flip) {
+  if (!GUARD_SHEET.ready) return false;
+  const cfg = GUARD_SHEET.states[state];
+  if (!cfg) return false;
+  const idx = Math.floor(animTime / cfg.rate) % cfg.frames;
+  const sx = idx     * GUARD_SHEET.frameW;
+  const sy = cfg.row * GUARD_SHEET.frameH;
+  const sw = GUARD_SHEET.frameW;
+  const sh = GUARD_SHEET.frameH;
+  if (flip) {
+    ctx.save();
+    ctx.translate(dx + dw, dy);
+    ctx.scale(-1, 1);
+    ctx.drawImage(GUARD_SHEET.image, sx, sy, sw, sh, 0, 0, dw, dh);
+    ctx.restore();
+  } else {
+    ctx.drawImage(GUARD_SHEET.image, sx, sy, sw, sh, dx, dy, dw, dh);
+  }
+  return true;
+}

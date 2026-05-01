@@ -171,9 +171,9 @@ class Player {
 
     const flip = (this.facing === -1);
 
-    // Sprite hiển thị 64x96 (lớn hơn collision box 36x48 để chi tiết rõ),
+    // Sprite hiển thị 48x72 (~3/4 kích thước trước, vẫn lớn hơn collision box 36x48),
     // căn giữa theo X và đáy theo Y - "feet" sprite chạm đáy collision box
-    const displayW = 64, displayH = 96;
+    const displayW = 48, displayH = 72;
     const dx = this.x - camX - (displayW - this.w) / 2;
     const dy = this.y - camY - (displayH - this.h);
 

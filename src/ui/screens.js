@@ -153,13 +153,11 @@ function drawTitleScreen() {
     drawSpaceBackground();   // fallback khi ảnh chưa tải xong
   }
 
-  // Bảng xếp hạng mini ở góc trên-phải, kích thước nhỏ + nền hơi mờ để
-  // ảnh nền vẫn hiện qua được
-  drawLeaderboardPanel(W - 380, 30, 360, 360, null);
+  // (Bảng xếp hạng đã chuyển sang chỉ hiện ở gameover/win - giữ intro thuần ảnh)
 
-  // Hint xuất / nhập file (chân trang nhỏ, không choán ảnh)
-  drawText("B : Xuất bảng ra file   |   L : Nhập bảng từ file",
-           W - 200, 400, 12, "#aef", "#000", "center");
+  // Hint phím xuất / nhập file - nhỏ ở góc dưới phải để không che ảnh
+  drawText("B : Xuất bảng   |   L : Nhập bảng",
+           W - 24, H - 28, 12, "rgba(255,255,255,0.7)", "#000", "right");
 
   // Tín dụng tác giả góc dưới-trái (nhỏ, có shadow)
   drawText("Thiết kế bởi: Lâm, 10 tuổi",

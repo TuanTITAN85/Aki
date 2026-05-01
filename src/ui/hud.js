@@ -57,13 +57,25 @@ function drawPowerBar() {
              "#000", "center");
 
     if (owned) {
-      // icon vòng tròn theo màu power
-      ctx.fillStyle = cfg.glow;
-      ctx.beginPath(); ctx.arc(x + sw/2, y + 30, 14, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = cfg.color;
-      ctx.beginPath(); ctx.arc(x + sw/2, y + 30, 10, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(x + sw/2 - 4, y + 26, 3, 3);
+      // Trái ác quỷ -> dùng PNG. "default" (Phép Cơ Bản) -> circle vì không có PNG
+      const isFruit = power !== "default";
+      let drawn = false;
+      if (isFruit) {
+        const iconSize = 36;
+        drawn = drawFruitImage(power,
+                               x + sw/2 - iconSize/2,
+                               y + 30 - iconSize/2,
+                               iconSize, iconSize);
+      }
+      if (!drawn) {
+        // Default (hoặc fruit chưa tải): vẽ circle theo màu power
+        ctx.fillStyle = cfg.glow;
+        ctx.beginPath(); ctx.arc(x + sw/2, y + 30, 14, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = cfg.color;
+        ctx.beginPath(); ctx.arc(x + sw/2, y + 30, 10, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(x + sw/2 - 4, y + 26, 3, 3);
+      }
     } else {
       ctx.fillStyle = "rgba(0,0,0,0.4)";
       ctx.fillRect(x + sw/2 - 8, y + 22, 16, 16);
@@ -144,14 +156,21 @@ function drawHUD() {
   drawText("Điểm: " + player.score, panelX + 14, panelY + 110, 17, "#ffd24a", "#000");
   drawText("Vàng: " + player.gold,  panelX + 14, panelY + 132, 17, "#fff5a0", "#000");
 
-  // Sức mạnh hiện tại - icon vòng tròn + tên
+  // Sức mạnh hiện tại - icon PNG cho 5 trái, circle cho default
   const pcfg = POWERS[player.power] || POWERS.default;
   drawText("Sức mạnh:", panelX + 14, panelY + 156, 15, "#aef", "#000");
   const icx = panelX + 110, icy = panelY + 165;
-  ctx.fillStyle = pcfg.glow;
-  ctx.beginPath(); ctx.arc(icx, icy, 9, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = pcfg.color;
-  ctx.beginPath(); ctx.arc(icx, icy, 6, 0, Math.PI * 2); ctx.fill();
+  let drawnIcon = false;
+  if (player.power !== "default") {
+    drawnIcon = drawFruitImage(player.power, icx - 11, icy - 11, 22, 22);
+  }
+  if (!drawnIcon) {
+    // Fallback: circle theo màu power
+    ctx.fillStyle = pcfg.glow;
+    ctx.beginPath(); ctx.arc(icx, icy, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = pcfg.color;
+    ctx.beginPath(); ctx.arc(icx, icy, 6, 0, Math.PI * 2); ctx.fill();
+  }
   drawText(pcfg.name, panelX + 124, panelY + 156, 15, pcfg.color, "#000");
 
   // Kiếm hiện tại

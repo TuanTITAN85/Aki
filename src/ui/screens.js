@@ -1,5 +1,11 @@
 "use strict";
 // =============================================================================
+// Tải ảnh nền cho title screen (đã chứa sẵn title + character + "Bấm Enter")
+// =============================================================================
+const introBg = new Image();
+introBg.src = "assets/intro_screen.png";
+
+// =============================================================================
 // SCREENS - các màn hình full-screen ngoài gameplay:
 //   - drawSpaceBackground (nền dùng chung cho title / nameInput)
 //   - drawLeaderboardPanel (top 10, dùng ở title + gameover + win)
@@ -136,46 +142,28 @@ function drawQuestPanel() {
 }
 
 // =============================================================================
-// Màn hình tiêu đề - 2 cột: hướng dẫn + bảng xếp hạng
+// Màn hình tiêu đề - dùng ảnh nền có sẵn (đã có title + character + "Nhấn Enter")
+// + leaderboard mini overlay góc phải để bạn bè vẫn xem được top điểm
 // =============================================================================
 function drawTitleScreen() {
-  drawSpaceBackground();
+  // Vẽ ảnh nền full canvas (giữ aspect bằng cách stretch nhẹ - canvas 16:9, ảnh 16:8.7)
+  if (introBg.complete && introBg.naturalWidth > 0) {
+    ctx.drawImage(introBg, 0, 0, W, H);
+  } else {
+    drawSpaceBackground();   // fallback khi ảnh chưa tải xong
+  }
 
-  // tiêu đề
-  drawText("ISLAND PIRATES", W/2, 50,  72, "#ffd24a", "#3a1a06", "center");
-  drawText("HẢI TẶC ĐẢO",    W/2, 130, 32, "#fff",    "#3a1a06", "center");
+  // Bảng xếp hạng mini ở góc trên-phải, kích thước nhỏ + nền hơi mờ để
+  // ảnh nền vẫn hiện qua được
+  drawLeaderboardPanel(W - 380, 30, 360, 360, null);
 
-  // hộp hướng dẫn (trái) - phẳng, vạch nhấn vàng đỉnh
-  const bx = 60, by = 200, bw = 560, bh = 380;
-  ctx.fillStyle = "rgba(14, 22, 48, 0.78)";
-  ctx.fillRect(bx, by, bw, bh);
-  ctx.fillStyle = "#ffd24a";
-  ctx.fillRect(bx, by, bw, 3);
-
-  drawText("CÁCH CHƠI", bx + bw/2, by + 14, 24, "#ffd24a", "#000", "center");
-  drawText("← →  : Di chuyển trái / phải",         bx + 30, by + 60,  19, "#fff");
-  drawText("↑ hoặc Cách : Nhảy lên",               bx + 30, by + 90,  19, "#fff");
-  drawText("Chuột Trái : Bắn phép từ xa",          bx + 30, by + 120, 19, "#cba9ff");
-  drawText("Enter : Nói chuyện / Mở nhiệm vụ",     bx + 30, by + 150, 19, "#7afc6e");
-  drawText("E : Mở Cửa Hàng (mua bằng vàng)",      bx + 30, by + 180, 19, "#fff5a0");
-
-  drawText("Mục tiêu:",                            bx + 30, by + 222, 19, "#aef");
-  drawText("Khám phá 5 hòn đảo, đánh bại lính,",   bx + 30, by + 250, 17, "#fff");
-  drawText("thú rừng và Boss để chiến thắng!",     bx + 30, by + 274, 17, "#fff");
-  drawText("Vàng cao + thắng = top bảng xếp hạng", bx + 30, by + 312, 17, "#ffd24a");
-  drawText("(điểm thắng có dấu ⭐)",                bx + 30, by + 336, 16, "#7afc6e");
-
-  // bảng xếp hạng (phải)
-  drawLeaderboardPanel(660, 200, 560, 380, null);
-  // chỉ dẫn xuất / nhập file
+  // Hint xuất / nhập file (chân trang nhỏ, không choán ảnh)
   drawText("B : Xuất bảng ra file   |   L : Nhập bảng từ file",
-           940, 590, 14, "#aef", "#000", "center");
+           W - 200, 400, 12, "#aef", "#000", "center");
 
-  // nút bắt đầu nhấp nháy
-  const blink = Math.floor(Date.now() / 500) % 2 === 0;
-  drawText("► Bấm ENTER để bắt đầu chơi ◄", W/2, H - 90, 30,
-           blink ? "#fff" : "#ffd24a", "#000", "center");
-  drawText("Thiết kế bởi: Lâm, 10 tuổi", W/2, H - 50, 16, "#aef", "#000", "center");
+  // Tín dụng tác giả góc dưới-trái (nhỏ, có shadow)
+  drawText("Thiết kế bởi: Lâm, 10 tuổi",
+           24, H - 28, 14, "#fff", "#000");
 }
 
 // =============================================================================

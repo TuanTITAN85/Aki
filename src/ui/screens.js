@@ -158,6 +158,33 @@ function drawQuestPanel() {
 }
 
 // =============================================================================
+// Màn hình TẠM DỪNG - khi user chuyển tab / mất focus cửa sổ
+// Hiển thị overlay tối + thông báo + hint Enter để tiếp tục.
+// =============================================================================
+function drawPauseScreen() {
+  // Nền tối phẳng
+  ctx.fillStyle = "#0e1530";
+  ctx.fillRect(0, 0, W, H);
+
+  // Tiêu đề lớn với icon pause
+  drawText("⏸ TẠM DỪNG", W/2, H/2 - 90, 72, "#ffd24a", "#3a1a06", "center");
+
+  // Mô tả
+  drawText("Game đã tự dừng vì bạn rời khỏi tab",
+           W/2, H/2 + 10, 22, "#aef", "#000", "center");
+
+  // Hint Enter nhấp nháy
+  const blink = Math.floor(Date.now() / 500) % 2 === 0;
+  drawText("► Bấm ENTER để tiếp tục chơi ◄",
+           W/2, H/2 + 70, 28,
+           blink ? "#7afc6e" : "#fff", "#000", "center");
+
+  // Hint nhỏ phía dưới
+  drawText("Tiến độ đảo + máu + vật phẩm vẫn được giữ nguyên",
+           W/2, H - 60, 14, "rgba(255,255,255,0.5)", "#000", "center");
+}
+
+// =============================================================================
 // Màn hình LOADING - hiển thị tiến độ tải tài nguyên trước khi vào title
 // Tự động chuyển sang STATE.TITLE khi AssetLoader.isReady() (xem update loop).
 // =============================================================================

@@ -269,9 +269,35 @@ const STATE = {
   PLAYING:    "playing",
   QUEST:      "quest",
   SHOP:       "shop",
+  PAUSED:     "paused",      // user đổi tab/app, đợi Enter để resume
   WIN:        "win",
   GAMEOVER:   "gameover"
 };
+
+// State trước khi pause - dùng để resume về đúng chỗ (PLAYING/QUEST/SHOP)
+let pausedFromState = null;
+
+// Pause/resume - chỉ áp dụng cho gameplay states (không pause title/gameover/win)
+function tryPauseFromTabSwitch() {
+  if (gameState === STATE.PLAYING || gameState === STATE.QUEST || gameState === STATE.SHOP) {
+    pausedFromState = gameState;
+    gameState = STATE.PAUSED;
+    stopBGM();
+  }
+}
+function resumeFromPause() {
+  gameState = pausedFromState || STATE.PLAYING;
+  pausedFromState = null;
+  startBGM();
+}
+
+// Lắng nghe khi tab bị ẩn (chuyển tab khác) hoặc cửa sổ mất focus (đổi app)
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) tryPauseFromTabSwitch();
+});
+window.addEventListener("blur", () => {
+  tryPauseFromTabSwitch();
+});
 
 // =====================================================================
 // BẢNG XẾP HẠNG -------------------------------------------------------
@@ -548,6 +574,12 @@ function update() {
       }
     }
     if (noticeTimer > 0) noticeTimer--;
+  } else if (gameState === STATE.PAUSED) {
+    // Đợi user bấm Enter để tiếp tục chơi
+    if (input.enter) {
+      input.enter = false;
+      resumeFromPause();
+    }
   } else if (gameState === STATE.GAMEOVER || gameState === STATE.WIN) {
     if (input.enter) {
       input.enter = false;
@@ -575,6 +607,10 @@ function draw() {
 
   if (gameState === STATE.LOADING) {
     drawLoadingScreen();
+    return;
+  }
+  if (gameState === STATE.PAUSED) {
+    drawPauseScreen();
     return;
   }
   if (gameState === STATE.TITLE) {

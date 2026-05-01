@@ -169,15 +169,31 @@ class Player {
     // Nhấp nháy khi đang bất tử
     if (this.invul > 0 && Math.floor(this.invul / 4) % 2 === 0) return;
 
+    const flip = (this.facing === -1);
+
+    // Sprite hiển thị 64x96 (lớn hơn collision box 36x48 để chi tiết rõ),
+    // căn giữa theo X và đáy theo Y - "feet" sprite chạm đáy collision box
+    const displayW = 64, displayH = 96;
+    const dx = this.x - camX - (displayW - this.w) / 2;
+    const dy = this.y - camY - (displayH - this.h);
+
+    // Ưu tiên sprite sheet PNG nếu đã tải xong
+    if (this.state === "idle") {
+      const idx = Math.floor(this.animTime / 12) % 4;   // 4 frame, đổi mỗi 12 tick
+      if (drawPirateSpriteFrame("idle", idx, dx, dy, displayW, displayH, flip)) return;
+    } else if (this.state === "run") {
+      const idx = Math.floor(this.animTime / 6) % 4;    // 4 frame, đổi mỗi 6 tick
+      if (drawPirateSpriteFrame("run", idx, dx, dy, displayW, displayH, flip)) return;
+    }
+
+    // Fallback (state=jump hoặc sprite chưa tải xong): pixel matrix cũ
     let grid;
     if (this.state === "jump") grid = PIRATE_JUMP;
     else if (this.state === "run") {
       grid = (Math.floor(this.animTime / 6) % 2 === 0) ? PIRATE_RUN_1 : PIRATE_RUN_2;
     } else {
-      // idle: hơi nhún nhẹ
       grid = (Math.floor(this.animTime / 30) % 2 === 0) ? PIRATE_IDLE_1 : PIRATE_IDLE_2;
     }
-    const flip = (this.facing === -1);
     drawPixelSprite(grid, PIRATE_PALETTE, this.x - camX, this.y - camY, 3, flip);
   }
 }

@@ -218,3 +218,70 @@ const PIRATE_JUMP = [
   "..KK....KK..",
   "............"
 ];
+
+// =============================================================================
+// SPRITE SHEET MỚI cho hải tặc (PNG từ assets/)
+// Mỗi animation là 1 file: các frame xếp ngang, kích thước bằng nhau.
+// Background trắng được chuyển thành alpha=0 ngay khi tải (chroma key).
+//
+// Trong Player.draw(): nếu sprite đã tải xong -> dùng ctx.drawImage,
+// ngược lại fallback về PIRATE_IDLE_*/PIRATE_RUN_*/PIRATE_JUMP pixel matrix.
+// State "jump" hiện tại chưa có asset PNG -> luôn dùng pixel matrix cũ.
+// =============================================================================
+const PIRATE_SPRITES = {
+  idle: { src: "assets/pirate_idle.png", frameW: 400, frameH: 397, count: 4, image: null, ready: false },
+  run:  { src: "assets/pirate_run.png",  frameW: 400, frameH: 397, count: 4, image: null, ready: false }
+};
+
+// Tải ảnh + chroma key trắng -> alpha=0 (Gemini xuất background trắng đặc)
+function loadPirateSprites() {
+  for (const key of Object.keys(PIRATE_SPRITES)) {
+    const cfg = PIRATE_SPRITES[key];
+    const img = new Image();
+    img.onload = () => {
+      // Vẽ image lên canvas tạm để xử lý pixel
+      const c = document.createElement("canvas");
+      c.width = img.width;
+      c.height = img.height;
+      const cx = c.getContext("2d");
+      cx.drawImage(img, 0, 0);
+      const data = cx.getImageData(0, 0, c.width, c.height);
+      const px = data.data;
+      // Pixel gần trắng (>240 ở cả 3 kênh) -> trong suốt
+      for (let i = 0; i < px.length; i += 4) {
+        if (px[i] > 240 && px[i+1] > 240 && px[i+2] > 240) {
+          px[i+3] = 0;
+        }
+      }
+      cx.putImageData(data, 0, 0);
+      cfg.image = c;          // dùng canvas đã alpha hoá thay cho image gốc
+      cfg.ready = true;
+    };
+    img.onerror = () => {
+      console.warn("Không tải được sprite:", cfg.src,
+                   "- player sẽ dùng pixel matrix cũ");
+      cfg.ready = false;
+    };
+    img.src = cfg.src;
+  }
+}
+loadPirateSprites();
+
+// Vẽ 1 frame của sprite hải tặc. Trả về true nếu vẽ thành công, false nếu
+// sprite chưa tải xong (caller nên fallback sang pixel matrix).
+function drawPirateSpriteFrame(state, frameIdx, dx, dy, dw, dh, flip) {
+  const cfg = PIRATE_SPRITES[state];
+  if (!cfg || !cfg.ready) return false;
+  const sx = (frameIdx % cfg.count) * cfg.frameW;
+  const sy = 0;
+  if (flip) {
+    ctx.save();
+    ctx.translate(dx + dw, dy);
+    ctx.scale(-1, 1);
+    ctx.drawImage(cfg.image, sx, sy, cfg.frameW, cfg.frameH, 0, 0, dw, dh);
+    ctx.restore();
+  } else {
+    ctx.drawImage(cfg.image, sx, sy, cfg.frameW, cfg.frameH, dx, dy, dw, dh);
+  }
+  return true;
+}

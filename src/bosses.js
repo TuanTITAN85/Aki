@@ -241,6 +241,12 @@ function drawYeti(b, camX, camY) {
 
 // ----- Hàm vẽ Hổ Lửa (Đảo 4) -----
 function drawFireTiger(b, camX, camY) {
+  // Ưu tiên sprite PNG nếu đã tải xong
+  if (drawBossSpriteFrame("fire_tiger", pickBossAnimState(b),
+                          b.animTime, b, camX, camY)) {
+    return;
+  }
+  // Fallback: vẽ shapes thủ công (code cũ)
   const x = b.x - camX, y = b.y - camY;
   const w = b.w, h = b.h;
   const t = b.animTime;

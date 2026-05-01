@@ -50,6 +50,13 @@
   <canvas id="game" width="1280" height="720"></canvas>
 </div>
 
+<!-- Input ẩn để bắt tên hải tặc với hỗ trợ IME tiếng Việt (Telex/VNI/Unikey).
+     Đặt off-screen, focus khi vào STATE.NAME_INPUT, blur khi rời. -->
+<input id="nameInput" type="text" maxlength="14" autocomplete="off"
+       autocapitalize="off" spellcheck="false"
+       style="position: fixed; top: -9999px; left: -9999px;
+              opacity: 0; pointer-events: none;">
+
 <script>
 "use strict";
 
@@ -63,6 +70,10 @@
 const canvas = document.getElementById("game");
 const ctx    = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false; // giữ nét pixel
+
+// Input ẩn cho việc nhập tên hải tặc - hỗ trợ IME tiếng Việt (Telex/VNI/Unikey).
+// Code chỉ đọc .value mỗi frame ở STATE.NAME_INPUT thay vì tự bắt keydown.
+const nameInputEl = document.getElementById("nameInput");
 
 // Kích thước màn hình game
 const W = canvas.width;
@@ -182,26 +193,12 @@ const input = {
   jump: false, mouseDown: false, mouseX: 0, mouseY: 0
 };
 window.addEventListener("keydown", e => {
-  // Khi đang nhập tên: bắt mọi phím chữ/số/khoảng trắng
+  // Khi đang nhập tên: chỉ bắt Enter/Escape ở đây, mọi phím chữ/số/IME để
+  // <input id="nameInput"> tự xử lý (hỗ trợ Telex/VNI/Unikey). Code đồng bộ
+  // typedName = nameInputEl.value mỗi frame trong update().
   if (typeof gameState !== "undefined" && gameState === STATE.NAME_INPUT) {
-    if (e.code === "Backspace") {
-      typedName = typedName.slice(0, -1);
-      e.preventDefault();
-      return;
-    }
-    if (e.code === "Enter") {
-      input.enter = true;
-      e.preventDefault();
-      return;
-    }
+    if (e.code === "Enter")  { input.enter = true; e.preventDefault(); return; }
     if (e.code === "Escape") { input.esc = true; return; }
-    // chấp nhận chữ La-tinh, số, khoảng trắng và ký tự tiếng Việt có dấu
-    if (e.key && e.key.length === 1 && typedName.length < 14) {
-      if (/[A-Za-z0-9 _\-]/.test(e.key) ||
-          /[À-ɏḀ-ỿ]/.test(e.key)) {
-        typedName += e.key;
-      }
-    }
     return;   // chặn không cho phím game chạy lúc đang gõ tên
   }
   if (e.code === "ArrowLeft")  input.left = true;
@@ -516,21 +513,37 @@ function update() {
   } else if (gameState === STATE.TITLE) {
     if (input.enter) {
       input.enter = false;
-      // Bắt đầu nhập tên
+      // Bắt đầu nhập tên - focus input ẩn để IME tiếng Việt hoạt động
       ensureAudio();
       typedName = (player && player.name && player.name !== "Hải Tặc") ? player.name : "";
+      nameInputEl.value = typedName;
       gameState = STATE.NAME_INPUT;
+      // Cho phép input nhận focus tạm thời
+      nameInputEl.style.pointerEvents = "auto";
+      // Focus sau micro-task để đảm bảo state đã đổi
+      Promise.resolve().then(() => nameInputEl.focus());
     }
   } else if (gameState === STATE.NAME_INPUT) {
+    // Đồng bộ giá trị từ <input> sang typedName mỗi frame.
+    // <input> là source of truth - IME tiếng Việt (Telex/VNI/Unikey) tự xử lý.
+    typedName = nameInputEl.value.slice(0, 14);
+    // Auto-refocus nếu user click ra ngoài
+    if (document.activeElement !== nameInputEl) {
+      nameInputEl.focus();
+    }
     if (input.esc) {
       input.esc = false;
       gameState = STATE.TITLE;
+      nameInputEl.blur();
+      nameInputEl.style.pointerEvents = "none";
     }
     if (input.enter) {
       input.enter = false;
       if (typedName.trim().length === 0) {
         showNotice("Vui lòng nhập tên hải tặc của bạn!", 90);
       } else {
+        nameInputEl.blur();
+        nameInputEl.style.pointerEvents = "none";
         startGame();
       }
     }

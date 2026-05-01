@@ -210,6 +210,13 @@ window.addEventListener("keydown", e => {
     if (e.code === "Backspace") { input.bs = true; e.preventDefault(); return; }
     return;   // chặn các phím khác không ảnh hưởng game
   }
+  // SHOP: ESC đóng cửa hàng ngay (← → chuyển tab)
+  if (gameState === STATE.SHOP) {
+    if (e.code === "Escape") { gameState = STATE.PLAYING; e.preventDefault(); return; }
+    if (e.code === "ArrowLeft")  { switchShopTab(-1); e.preventDefault(); return; }
+    if (e.code === "ArrowRight") { switchShopTab(1);  e.preventDefault(); return; }
+    return;   // chặn phím game không ảnh hưởng khi đang ở shop
+  }
   if (e.code === "ArrowLeft")  input.left = true;
   if (e.code === "ArrowRight") input.right = true;
   if (e.code === "ArrowUp")    input.up = true;

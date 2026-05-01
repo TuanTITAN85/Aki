@@ -112,6 +112,12 @@ function drawMonkeyKing(b, camX, camY) {
 
 // ----- Hàm vẽ Bọ Cạp Khổng Lồ (Đảo 2) -----
 function drawGiantScorpion(b, camX, camY) {
+  // Ưu tiên sprite PNG nếu đã tải xong
+  if (drawBossSpriteFrame("giant_scorpion", pickBossAnimState(b),
+                          b.animTime, b, camX, camY)) {
+    return;
+  }
+  // Fallback: vẽ shapes thủ công (code cũ)
   const x = b.x - camX, y = b.y - camY;
   const w = b.w, h = b.h;
   const t = b.animTime;

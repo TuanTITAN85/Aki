@@ -459,8 +459,19 @@ const BOSS_SHEETS = {
       attack: { row: 3, frames: 4, rate: 5  }
     },
     image: null, ready: false, frameW: 0, frameH: 0
+  },
+  giant_scorpion: {
+    src: "assets/boss_giant_scorpion.png",
+    cols: 4, rows: 4,
+    states: {
+      idle:   { row: 0, frames: 4, rate: 12 },
+      walk:   { row: 1, frames: 4, rate: 8  },
+      charge: { row: 2, frames: 4, rate: 6  },
+      attack: { row: 3, frames: 4, rate: 5  }
+    },
+    image: null, ready: false, frameW: 0, frameH: 0
   }
-  // TODO: giant_scorpion, yeti, fire_tiger, dark_king (khi có asset)
+  // TODO: yeti, fire_tiger, dark_king (khi có asset)
 };
 
 function loadBossSheets() {

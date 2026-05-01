@@ -1,6 +1,6 @@
 "use strict";
 // =============================================================================
-// Tải ảnh nền cho title screen (đã chứa sẵn title + character + "Bấm Enter")
+// Tải ảnh nền cho các màn hình ngoài gameplay
 // Đăng ký vào AssetLoader để loading screen biết khi nào tải xong.
 // =============================================================================
 AssetLoader.expect();
@@ -11,6 +11,15 @@ introBg.onerror = () => {
   AssetLoader.done(false);
 };
 introBg.src = "assets/intro_screen.png";
+
+AssetLoader.expect();
+const nameInputBg = new Image();
+nameInputBg.onload  = () => AssetLoader.done(true);
+nameInputBg.onerror = () => {
+  console.warn("Không tải được name_input_screen.png - dùng nền sao");
+  AssetLoader.done(false);
+};
+nameInputBg.src = "assets/name_input_screen.png";
 
 // =============================================================================
 // SCREENS - các màn hình full-screen ngoài gameplay:
@@ -214,45 +223,40 @@ function drawTitleScreen() {
 
 // =============================================================================
 // Màn hình nhập tên hải tặc
+// Dùng ảnh nền có sẵn title "NHẬP TÊN HẢI TẶC" + subtitle + parchment scroll
+// + hint "Tối đa 14 ký tự — Bấm ENTER để bắt đầu"
+// Code chỉ overlay: tên đang gõ vào giữa parchment + ESC hint + error.
 // =============================================================================
 function drawNameInput() {
-  drawSpaceBackground();
+  // Vẽ ảnh nền full canvas (đã có toàn bộ trang trí + chữ)
+  if (nameInputBg.complete && nameInputBg.naturalWidth > 0) {
+    ctx.drawImage(nameInputBg, 0, 0, W, H);
+  } else {
+    drawSpaceBackground();   // fallback
+  }
 
-  drawText("NHẬP TÊN HẢI TẶC", W/2, 130, 56, "#ffd24a", "#000", "center");
-  drawText("Hãy đặt một cái tên thật ngầu!", W/2, 210, 22, "#fff", "#000", "center");
-
-  // ô nhập - phẳng, gạch chân vàng đậm thay cho viền
-  const bx = W/2 - 320, by = 280, bw = 640, bh = 90;
-  ctx.fillStyle = "rgba(14, 22, 48, 0.78)";
-  ctx.fillRect(bx, by, bw, bh);
-  ctx.fillStyle = "#ffd24a";
-  ctx.fillRect(bx, by + bh - 4, bw, 4);   // gạch chân = focus indicator
-  // nội dung + con trỏ nhấp nháy
+  // Overlay tên đang gõ - căn giữa parchment scroll trong ảnh
+  // Toạ độ tinh chỉnh theo ảnh 1024x547 stretch lên 1280x720 (parchment ~y=290 trong ảnh)
+  const inputY = H * 0.50;     // ~360 - giữa parchment scroll
   const cursor = (Math.floor(Date.now() / 400) % 2 === 0) ? "▌" : " ";
   const display = typedName + cursor;
-  drawText(display, W/2, by + 28, 38, "#fff", "#000", "center");
+  drawText(display, W/2, inputY, 42, "#3a1a06", "#ffd24a", "center");
 
-  drawText("Gõ chữ để nhập tên (tối đa 14 ký tự, có thể dùng tiếng Việt)",
-           W/2, by + bh + 24, 18, "#aef", "#000", "center");
-  drawText("Backspace để xoá ký tự",
-           W/2, by + bh + 50, 18, "#aef", "#000", "center");
-
-  if (typedName.trim().length > 0) {
-    const blink = Math.floor(Date.now() / 500) % 2 === 0;
-    drawText("► Bấm ENTER để bắt đầu ◄", W/2, H - 130, 30,
-             blink ? "#7afc6e" : "#fff", "#000", "center");
-  } else {
+  // Báo lỗi nếu chưa nhập tên (text đỏ, hiện nhẹ phía dưới hint trong ảnh)
+  if (typedName.trim().length === 0 && noticeTimer === 0) {
     drawText("(Cần nhập tên trước khi bắt đầu)",
-             W/2, H - 130, 22, "#ff8a8a", "#000", "center");
+             W/2, H * 0.78, 20, "#ff5a5a", "#000", "center");
   }
-  drawText("ESC : Quay lại màn hình tiêu đề",
-           W/2, H - 80, 18, "#aef", "#000", "center");
 
-  // thông báo lỗi nếu có
+  // Hint ESC ở chân màn hình (ảnh không có)
+  drawText("ESC : Quay lại màn hình tiêu đề",
+           W/2, H - 24, 14, "rgba(255,255,255,0.85)", "#000", "center");
+
+  // Thông báo lỗi từ showNotice (vd: "Vui lòng nhập tên hải tặc của bạn!")
   if (noticeTimer > 0 && questNotice) {
     ctx.fillStyle = "rgba(0,0,0,0.7)";
-    ctx.fillRect(W/2 - 360, H - 200, 720, 40);
-    drawText(questNotice, W/2, H - 192, 20, "#ff8a8a", "#000", "center");
+    ctx.fillRect(W/2 - 360, H * 0.78 - 8, 720, 40);
+    drawText(questNotice, W/2, H * 0.78 - 2, 20, "#ff8a8a", "#000", "center");
   }
 }
 

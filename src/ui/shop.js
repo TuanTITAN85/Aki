@@ -48,10 +48,14 @@ const SHOP_LAYOUT = {
   panelX: 40, panelY: 24, panelW: 1200, panelH: 672,
   headerH: 56,
   footerH: 52,
-  cardW: 364, cardH: 130, cols: 3, gap: 14,
-  startX: 52, startY: 96,   // startY tính từ panelY, sau header
-  tabBarH: 44
+  tabBarH: 44,
+  cardW: 364, cardH: 116, cols: 3, gap: 14,
+  startX: 52
 };
+// startY tính động: sau header + tab bar + gap
+Object.defineProperty(SHOP_LAYOUT, "startY", {
+  get: function() { return this.panelY + this.headerH + this.tabBarH + 12; }
+});
 
 // Rect của một card trong tab hiện tại
 function shopCardRect(idx) {
@@ -258,10 +262,10 @@ function drawShop() {
   const items = shopTabItems();
   const contentTop = tabBarY + L.tabBarH + 12;
   const contentBottom = L.panelY + L.panelH - L.footerH - 8;
-  const maxRows = Math.floor((contentBottom - contentTop) / (L.cardH + L.gap));
-  const rows = Math.min(maxRows, Math.ceil(items.length / L.cols));
+  const maxRows = Math.min(3, Math.floor((contentBottom - contentTop) / (L.cardH + L.gap)));
+  const maxItems = maxRows * L.cols;  // giới hạn items vẽ được
 
-  for (let i = 0; i < items.length; i++) {
+  for (let i = 0; i < Math.min(items.length, maxItems); i++) {
     const it = items[i];
     const r  = shopCardRect(i);
 

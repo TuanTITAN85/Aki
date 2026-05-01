@@ -332,9 +332,15 @@ window.addEventListener("blur", () => {
 
 // =====================================================================
 // CỬA HÀNG - đã tách ra: src/ui/shop.js
-// Export: SHOP_ITEMS, SHOP_LAYOUT, shopCardRect, buyShopItem,
-//         drawShopIcon, drawShop
+// Export: SHOP_ITEMS, SHOP_LAYOUT, shopCardRect, shopCardRect, buyShopItem,
+//         drawShopIcon, drawShop, shopTab, shopTabAt, shopTabItems
 // =====================================================================
+// Chuyển tab cửa hàng (+1 hoặc -1)
+function switchShopTab(dir) {
+  const tabs = ["hp", "fruit", "sword", "companion"];
+  const idx = tabs.indexOf(shopTab);
+  shopTab = tabs[(idx + dir + tabs.length) % tabs.length];
+}
 let gameState = STATE.LOADING;     // bắt đầu ở loading, tự sang TITLE khi asset xong
 let currentIslandIdx = 0;
 let level = null;

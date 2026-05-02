@@ -173,6 +173,20 @@ class Enemy {
     if (this.aggro) {
       this.vx = Math.sign(dx) * speed;
       this.facing = Math.sign(dx) || this.facing;
+      // Smart aggro: không tự rơi xuống hố nếu đứng trên đất
+      // (boss vẫn lao như cũ - boss thường ở khu vực cuối, ít hố)
+      if (!this.boss && this.onGround && this.vx !== 0) {
+        const checkX = this.vx > 0 ? this.x + this.w + 4 : this.x - 4;
+        const checkY = this.y + this.h + 4;
+        if (!this._hasGroundBelow(level, checkX, checkY)) {
+          // Mép cliff phía trước -> nhảy nếu player cao hơn, không thì dừng
+          if (dy < -10 && Math.random() < 0.4) {
+            this.vy = -13;        // nhảy mạnh hơn để vượt hố
+          } else {
+            this.vx = 0;          // đứng tại mép, không lao xuống
+          }
+        }
+      }
       // Nhảy nếu thấy người chơi cao hơn (boss/quái nhảy thường xuyên hơn)
       const jumpChance = this.boss ? 0.08 : 0.07;
       if (this.onGround && dy < -20 && Math.random() < jumpChance) this.vy = -12;

@@ -162,14 +162,16 @@ class CompanionDog {
     }
   }
 
-  // Tìm enemy gần nhất trong tầm
-  _findNearestEnemy(level) {
+  // Tìm enemy gần nhất trong tầm - tính từ vị trí PLAYER (không phải companion)
+  // để companion không lao theo enemy ra ngoài tầm nhìn người chơi
+  _findNearestEnemy(level, player) {
     let nearest = null;
     let minDist = this.DOG_RANGE;
+    const px = player.x + player.w/2, py = player.y + player.h/2;
     for (const e of level.enemies) {
       if (!e.alive) continue;
-      const dx = (e.x + e.w/2) - (this.x + this.w/2);
-      const dy = (e.y + e.h/2) - (this.y + this.h/2);
+      const dx = (e.x + e.w/2) - px;
+      const dy = (e.y + e.h/2) - py;
       const dist = Math.sqrt(dx*dx + dy*dy);
       if (dist < minDist) {
         minDist = dist;
@@ -219,8 +221,20 @@ class CompanionDog {
       return;       // không cập nhật AI khi đang chết
     }
 
-    // Tìm enemy gần nhất
-    const target = this._findNearestEnemy(level);
+    // Leash: nếu đã đi quá xa player thì luôn quay về (kệ enemy gần)
+    // Tránh trường hợp Cún bám sát enemy rồi rời khỏi màn hình.
+    const px = player.x + player.w/2, py = player.y + player.h/2;
+    const distFromPlayer = Math.hypot(
+      (this.x + this.w/2) - px,
+      (this.y + this.h/2) - py
+    );
+    const LEASH_MAX = 280;        // bán kính tối đa Cún được rời player
+
+    // Tìm enemy gần PLAYER (không phải gần Cún) - khi enemy quá xa player thì
+    // không tấn công luôn để Cún khỏi đi xa
+    const target = (distFromPlayer < LEASH_MAX)
+                   ? this._findNearestEnemy(level, player)
+                   : null;
     this.targetEnemy = target;
 
     if (target) {

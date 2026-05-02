@@ -1,8 +1,8 @@
 # CLAUDE.md — Hướng dẫn cho Claude / Codex / dev tương lai
 
 Đây là **bản đồ điều hướng** của project Island Pirates. Đọc file này TRƯỚC khi
-mở code — biết cần mở đúng module nào thay vì tải toàn bộ ~3.500 dòng (chia cho
-13 file).
+mở code — biết cần mở đúng module nào thay vì tải toàn bộ ~3.700 dòng (chia cho
+14 file).
 
 ---
 
@@ -16,6 +16,7 @@ mở code — biết cần mở đúng module nào thay vì tải toàn bộ ~3.
 │   ├── audio.js             # 107 - Web Audio + 11 SFX + BGM loop
 │   ├── leaderboard.js       # 207 - Firestore + cache + xuất/nhập JSON
 │   ├── orb.js               #  57 - class MagicOrb (đạn phép)
+│   ├── companion.js         # ~150 - class CompanionDog + sprite + AI
 │   ├── bosses.js            # 475 - 5 boss draw + skill + BOSS_KINDS
 │   ├── player.js            # 183 - class Player
 │   ├── enemy.js             # 318 - class Enemy + sprite GUARD/BEAST
@@ -126,6 +127,14 @@ Vật phẩm + NPC + thuyền — đều có animation bồng bềnh nhẹ.
 ### `src/orb.js` (57 dòng)
 Class `MagicOrb` — đạn phép thuật cho cả player và enemy. Constructor nhận
 vector hướng (dirX, dirY). Hỗ trợ gravity (cho đạn parabol như chuối).
+
+### `src/companion.js` (~150 dòng)
+Class `CompanionDog` — chú Cún Golden Retriever đồng hành.
+- Sprite: `DOG_PALETTE` + 6 frame (idle ×2, walk ×2, attack ×2) pixel art 14×10
+- AI: tìm enemy gần nhất trong `DOG_RANGE=300px`, chạy tới cắn (`DOG_DAMAGE=20`)
+- Khi không có địch: lerp về bên cạnh player
+- Bất tử, platform collision, tên hiển thị phía trên sprite
+- Mua từ shop (200 vàng), đặt tên khi mua, reset khi Game Over
 
 ### `src/levels.js` (270 dòng)
 Cấu hình + sinh đảo + helpers nhiệm vụ.
@@ -246,6 +255,25 @@ Grep nhanh tất cả: `grep -n "^// [0-9]" index.html`
 - Palette: gold `#ffd24a`, success `#5dd968`, danger `#ff5a5a`, info `#5dccff`,
   surface `rgba(14,22,48,0.78-0.92)`, muted `#a8b6cc`
 
+### Thêm companion / pet đồng hành
+1. Tạo `src/companion.js` — class với sprite pixel art (6 frame: idle×2, walk×2, attack×2)
+2. AI trong `update(level, player)`: tìm enemy gần nhất trong `DOG_RANGE=300`, đuổi theo và cắn khi tới gần. Không có enemy → lerp về bên cạnh player.
+3. Thêm `companionDog` variable + `STATE.DOG_NAME` trong `index.html`
+4. Thêm `<script src="src/companion.js">` sau `player.js` trong HTML
+5. Thêm shop item có `kind:"companion"` vào `SHOP_ITEMS`
+6. Trong `buyShopItem`: transition sang `STATE.DOG_NAME` để nhập tên Cún
+7. Keydown handler cho `STATE.DOG_NAME`: Enter tạo `CompanionDog`, ESC refund vàng qua `pendingDogPrice`
+8. Trong `update()`: `if (companionDog) companionDog.update(level, player)`
+9. Trong `draw()`: `if (companionDog) companionDog.draw(camera.x, camera.y)` + `drawDogNamePanel()`
+10. `startGame()`: reset `companionDog = null`
+
+### Sửa cửa hàng (tab-based layout)
+Shop dùng layout tuyệt đối canvas (SHOP_LAYOUT) chia 4 tab: `hp`, `fruit`, `sword`, `companion`.
+- Mỗi zone có Y cố định: title=50, gold=68, tabBar=88, cards bắt đầu=148, footer=664
+- Click handler gọi `shopTabAt(x, y)` trả tab id hoặc null
+- Keydown: ESC/←/→ xử lý **trực tiếp trong keydown** với `e.preventDefault()` + `return` (không polling `input` flag trong `update()`)
+- `buyShopItem` dispatch theo `item.kind`: heal/fruit/sword/companion
+
 ---
 
 ## Khi sửa code
@@ -269,11 +297,11 @@ Grep nhanh tất cả: `grep -n "^// [0-9]" index.html`
 
 ## Tiết kiệm token khi nhờ AI
 
-Code đã chia thành 13 module ~50-475 dòng/file. Cần sửa ở đâu thì đọc đúng file:
+Code đã chia thành 14 module ~50-475 dòng/file. Cần sửa ở đâu thì đọc đúng file:
 
 - Sửa boss Yeti → `Read src/bosses.js` (475 dòng - hoặc dùng offset/limit)
 - Sửa âm thanh → `Read src/audio.js` (107 dòng)
-- Sửa shop → `Read src/ui/shop.js` (240 dòng)
+- Sửa shop → `Read src/ui/shop.js` (367 dòng — layout tab-based)
 - Sửa AI quái → `Read src/enemy.js` (318 dòng)
 - Sửa logic chính (state, update loop) → `Read index.html` (664 dòng)
 
@@ -295,13 +323,14 @@ Tách dần theo từng lần làm việc — KHÔNG nên tách đồng loạt:
 - [x] `src/enemy.js` — class Enemy + sprite GUARD_*/BEAST_* (318 dòng)
 - [x] `src/items.js` — Item, QuestNPC, Boat (184 dòng)
 - [x] `src/orb.js` — class MagicOrb (57 dòng)
+- [x] `src/companion.js` — class CompanionDog + sprite + AI (260 dòng)
 - [x] `src/levels.js` — ISLAND_CONFIGS + buildIsland + quest helpers (270 dòng)
 - [x] `src/world.js` — drawBackground/Platforms/Decorations + camera (163 dòng)
 - [x] `src/ui/hud.js` — drawHUD, drawPowerBar, drawCrosshair (209 dòng)
-- [x] `src/ui/shop.js` — SHOP_ITEMS, buyShopItem, drawShop (240 dòng)
+- [x] `src/ui/shop.js` — SHOP_ITEMS, buyShopItem, drawShop (367 dòng — layout tab-based)
 - [x] `src/ui/screens.js` — title/nameInput/quest/gameover/win (269 dòng)
 
-🎉 **Tất cả 13 module đã tách xong.** `index.html` giảm từ ~3.300 → 664
+🎉 **Tất cả 14 module đã tách xong.** `index.html` giảm từ ~3.300 → 664
 dòng (-80%). Phần còn lại chủ yếu là: HEAD, canvas setup, hằng số vật lý,
 POWERS table, input handlers, STATE, startGame/loadIsland/showNotice/commitScore,
 update() loop, draw() loop chính, vòng lặp `loop()`.

@@ -264,6 +264,9 @@ function drawTitleScreen() {
     drawSpaceBackground();   // fallback khi ảnh chưa tải xong
   }
 
+  // === SKIN SELECTOR - 2 thẻ ở giữa dưới (Hải Tặc Nam / Hải Tặc Nữ) ===
+  drawSkinSelector();
+
   // (Bảng xếp hạng đã chuyển sang chỉ hiện ở gameover/win - giữ intro thuần ảnh)
 
   // Hint phím xuất / nhập file - nhỏ ở góc dưới phải để không che ảnh
@@ -273,6 +276,90 @@ function drawTitleScreen() {
   // Tín dụng tác giả góc dưới-trái (nhỏ, có shadow)
   drawText("Thiết kế bởi: Lâm, 10 tuổi",
            24, H - 28, 14, "#fff", "#000");
+
+  // Notice ngắn (vd: "skin chưa có") hiển thị giữa-trên skin selector
+  if (typeof noticeTimer !== "undefined" && noticeTimer > 0 && questNotice) {
+    ctx.globalAlpha = Math.min(1, noticeTimer / 30);
+    const padX = 24, padY = 12, fs = 18;
+    ctx.font = `bold ${fs}px sans-serif`;
+    const tw = ctx.measureText(questNotice).width;
+    const boxW = tw + padX * 2, boxH = fs + padY * 2;
+    const noticeY = SKIN_SELECTOR_LAYOUT.y - 80;
+    ctx.fillStyle = "rgba(14, 22, 48, 0.92)";
+    ctx.fillRect(W/2 - boxW/2, noticeY, boxW, boxH);
+    ctx.fillStyle = "#ffd24a";
+    ctx.fillRect(W/2 - boxW/2, noticeY + boxH - 3, boxW, 3);
+    drawText(questNotice, W/2, noticeY + padY, fs, "#fff", "#000", "center");
+    ctx.globalAlpha = 1;
+  }
+}
+
+// Layout của skin selector: 2 thẻ vuông cạnh nhau ở giữa-dưới title screen
+const SKIN_SELECTOR_LAYOUT = {
+  cardW: 160, cardH: 100, gap: 24,
+  y: 540   // canvas y - dưới chữ "Nhấn Enter" của ảnh title
+};
+
+function skinCardRect(idx) {
+  const L = SKIN_SELECTOR_LAYOUT;
+  const totalW = L.cardW * 2 + L.gap;
+  const startX = (W - totalW) / 2;
+  return { x: startX + idx * (L.cardW + L.gap), y: L.y, w: L.cardW, h: L.cardH };
+}
+
+// Trả về "male"/"female" nếu click trúng card, null nếu không
+function skinAt(x, y) {
+  const skins = ["male", "female"];
+  for (let i = 0; i < skins.length; i++) {
+    const r = skinCardRect(i);
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return skins[i];
+  }
+  return null;
+}
+
+function drawSkinSelector() {
+  drawText("Chọn nhân vật:",
+           W/2, SKIN_SELECTOR_LAYOUT.y - 32, 18, "#ffd24a", "#000", "center");
+  const skins = [
+    { id: "male",   label: "Hải Tặc Nam",  ready: PIRATE_SHEETS.male.ready },
+    { id: "female", label: "Hải Tặc Nữ",   ready: PIRATE_SHEETS.female.ready }
+  ];
+  for (let i = 0; i < skins.length; i++) {
+    const s = skins[i];
+    const r = skinCardRect(i);
+    const active = (selectedSkin === s.id);
+    const hover  = (input.mouseX >= r.x && input.mouseX <= r.x + r.w &&
+                    input.mouseY >= r.y && input.mouseY <= r.y + r.h);
+    // Nền card phẳng + vạch nhấn dưới đáy nếu active
+    ctx.fillStyle = active ? "rgba(255, 210, 74, 0.28)"
+                  : hover  ? "rgba(255, 255, 255, 0.18)"
+                           : "rgba(14, 22, 48, 0.78)";
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    if (active) {
+      ctx.fillStyle = "#ffd24a";
+      ctx.fillRect(r.x, r.y + r.h - 4, r.w, 4);
+    }
+    // Vẽ preview sprite (frame idle 0) ở giữa card
+    const sheet = PIRATE_SHEETS[s.id];
+    const previewH = 72, previewW = 48;
+    const px = r.x + r.w/2 - previewW/2;
+    const py = r.y + 8;
+    if (sheet && sheet.ready) {
+      ctx.drawImage(sheet.image, 0, 0, sheet.frameW, sheet.frameH,
+                    px, py, previewW, previewH);
+    } else {
+      // Asset chưa có (vd female chưa generate) - vẽ silhouette ?
+      ctx.fillStyle = "rgba(255,255,255,0.15)";
+      ctx.fillRect(px, py, previewW, previewH);
+      drawText("?", r.x + r.w/2, py + previewH/2 - 16, 36, "#888", "#000", "center");
+    }
+    // Nhãn dưới
+    const labelCol = active ? "#ffd24a" : (hover ? "#fff" : "#cbd6e6");
+    drawText(s.label, r.x + r.w/2, r.y + r.h - 24, 14, labelCol, "#000", "center");
+    if (!sheet.ready) {
+      drawText("(sắp có)", r.x + r.w/2, r.y + r.h - 10, 10, "#888", "#000", "center");
+    }
+  }
 }
 
 // =============================================================================

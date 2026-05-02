@@ -266,21 +266,43 @@ const AssetLoader = {
 // Trong Player.draw(): nếu sprite đã ready -> ctx.drawImage,
 // ngược lại fallback về pixel matrix cũ (PIRATE_IDLE_*/RUN_*/JUMP).
 // =============================================================================
-const PIRATE_SHEET = {
-  src: "assets/pirate_sprite.png",
-  cols: 4, rows: 4,
-  // Định nghĩa từng state: hàng nào, số frame, tốc độ đổi
-  states: {
-    idle:  { row: 0, frames: 4, rate: 12 },   // chậm, hơi nhún
-    run:   { row: 1, frames: 4, rate: 6  },   // chạy nhanh
-    jump:  { row: 2, frames: 4, rate: 8  },
-    shoot: { row: 3, frames: 4, rate: 5  }
+// Hỗ trợ nhiều skin: male (đã có asset), female (sẽ thêm asset sau).
+// Cùng layout 4x4 grid + chroma key. Title screen có UI chọn skin trước khi
+// vào game; selectedSkin global lưu lựa chọn (mặc định "male").
+const PIRATE_SHEETS = {
+  male: {
+    src: "assets/pirate_sprite.png",
+    cols: 4, rows: 4,
+    states: {
+      idle:  { row: 0, frames: 4, rate: 12 },
+      run:   { row: 1, frames: 4, rate: 6  },
+      jump:  { row: 2, frames: 4, rate: 8  },
+      shoot: { row: 3, frames: 4, rate: 5  }
+    },
+    image: null, ready: false, frameW: 0, frameH: 0
   },
-  image: null,
-  ready: false,
-  frameW: 0,        // tính sau khi tải (= imageWidth / cols)
-  frameH: 0
+  female: {
+    src: "assets/pirate_sprite_female.png",
+    cols: 4, rows: 4,
+    states: {
+      idle:  { row: 0, frames: 4, rate: 12 },
+      run:   { row: 1, frames: 4, rate: 6  },
+      jump:  { row: 2, frames: 4, rate: 8  },
+      shoot: { row: 3, frames: 4, rate: 5  }
+    },
+    image: null, ready: false, frameW: 0, frameH: 0
+  }
 };
+
+// Skin đang chọn - đổi từ title screen, lưu giữ qua các lần chơi
+let selectedSkin = "male";
+
+// Lấy sheet active. Nếu skin chọn chưa ready thì fallback về male.
+function getActivePirateSheet() {
+  const s = PIRATE_SHEETS[selectedSkin];
+  if (s && s.ready) return s;
+  return PIRATE_SHEETS.male;
+}
 
 // Chroma key: pixel có màu gần với góc trên trái (background) -> alpha=0
 // Cách này tổng quát, không cần biết bg màu gì sẵn (magenta/trắng/xanh đều xài được).
@@ -301,7 +323,10 @@ function chromaKey(canvas, threshold = 35) {
   cx.putImageData(data, 0, 0);
 }
 
-function loadPirateSheet() {
+// Tải 1 sheet (male hoặc female). Female asset có thể chưa tồn tại - sẽ fail
+// silently và fallback về male trong getActivePirateSheet().
+function loadPirateSheet(key) {
+  const sheet = PIRATE_SHEETS[key];
   AssetLoader.expect();
   const img = new Image();
   img.onload = () => {
@@ -310,41 +335,43 @@ function loadPirateSheet() {
     c.height = img.height;
     const cx = c.getContext("2d");
     cx.drawImage(img, 0, 0);
-    chromaKey(c);                  // loại bg magenta
-    PIRATE_SHEET.image = c;
-    PIRATE_SHEET.frameW = img.width  / PIRATE_SHEET.cols;
-    PIRATE_SHEET.frameH = img.height / PIRATE_SHEET.rows;
-    PIRATE_SHEET.ready = true;
+    chromaKey(c);
+    sheet.image  = c;
+    sheet.frameW = img.width  / sheet.cols;
+    sheet.frameH = img.height / sheet.rows;
+    sheet.ready  = true;
     AssetLoader.done(true);
   };
   img.onerror = () => {
-    console.warn("Không tải được sprite sheet:", PIRATE_SHEET.src,
-                 "- player sẽ dùng pixel matrix cũ");
+    console.warn("Không tải được sprite sheet:", sheet.src,
+                 "(skin", key + ") - sẽ fallback");
     AssetLoader.done(false);
   };
-  img.src = PIRATE_SHEET.src;
+  img.src = sheet.src;
 }
-loadPirateSheet();
+loadPirateSheet("male");
+loadPirateSheet("female");
 
 // Vẽ 1 frame theo state + animTime. Trả về true nếu vẽ được, false nếu sprite
 // chưa tải xong (caller fallback sang pixel matrix).
 function drawPirateSpriteFrame(state, animTime, dx, dy, dw, dh, flip) {
-  if (!PIRATE_SHEET.ready) return false;
-  const cfg = PIRATE_SHEET.states[state];
+  const sheet = getActivePirateSheet();
+  if (!sheet || !sheet.ready) return false;
+  const cfg = sheet.states[state];
   if (!cfg) return false;
   const idx = Math.floor(animTime / cfg.rate) % cfg.frames;
-  const sx = idx     * PIRATE_SHEET.frameW;
-  const sy = cfg.row * PIRATE_SHEET.frameH;
-  const sw = PIRATE_SHEET.frameW;
-  const sh = PIRATE_SHEET.frameH;
+  const sx = idx     * sheet.frameW;
+  const sy = cfg.row * sheet.frameH;
+  const sw = sheet.frameW;
+  const sh = sheet.frameH;
   if (flip) {
     ctx.save();
     ctx.translate(dx + dw, dy);
     ctx.scale(-1, 1);
-    ctx.drawImage(PIRATE_SHEET.image, sx, sy, sw, sh, 0, 0, dw, dh);
+    ctx.drawImage(sheet.image, sx, sy, sw, sh, 0, 0, dw, dh);
     ctx.restore();
   } else {
-    ctx.drawImage(PIRATE_SHEET.image, sx, sy, sw, sh, dx, dy, dw, dh);
+    ctx.drawImage(sheet.image, sx, sy, sw, sh, dx, dy, dw, dh);
   }
   return true;
 }

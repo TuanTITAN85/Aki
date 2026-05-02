@@ -686,6 +686,18 @@ function update() {
       gameState = STATE.TITLE;
     }
   } else if (gameState === STATE.TITLE) {
+    // Click vào skin card để đổi skin (chỉ chọn được nếu asset đã ready)
+    if (input.mouseDown && !mouseClickConsumed) {
+      mouseClickConsumed = true;
+      const picked = skinAt(input.mouseX, input.mouseY);
+      if (picked && PIRATE_SHEETS[picked].ready) {
+        selectedSkin = picked;
+        sfxCoin();
+      } else if (picked && !PIRATE_SHEETS[picked].ready) {
+        showNotice("Skin này chưa có asset, sắp ra mắt!", 90);
+      }
+    }
+    if (!input.mouseDown) mouseClickConsumed = false;
     if (input.enter) {
       input.enter = false;
       // Bắt đầu nhập tên - focus input ẩn để IME tiếng Việt hoạt động
@@ -698,6 +710,7 @@ function update() {
       // Focus sau micro-task để đảm bảo state đã đổi
       Promise.resolve().then(() => nameInputEl.focus());
     }
+    if (noticeTimer > 0) noticeTimer--;
   } else if (gameState === STATE.NAME_INPUT) {
     // Đồng bộ giá trị từ <input> sang typedName mỗi frame.
     // <input> là source of truth - IME tiếng Việt (Telex/VNI/Unikey) tự xử lý.

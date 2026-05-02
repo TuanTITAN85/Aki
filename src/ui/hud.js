@@ -254,13 +254,21 @@ function drawHUD() {
     ctx.fillStyle = "#ff3838";                 ctx.fillRect(bx + 10, by + 26, 500 * r, 12);
   }
 
-  // Hint phím dưới đáy - chuyển sang PHẢI để không đè panel chính trái
-  ctx.fillStyle = "rgba(14, 22, 48, 0.78)";
-  ctx.fillRect(W - 420, H - 110, 400, 90);
-  ctx.fillStyle = "#ffd24a";
-  ctx.fillRect(W - 420, H - 110, 3, 90);
-  drawText("← → : Đi   ↑ / Cách : Nhảy",          W - 408, H - 102, 15, "#dbe6f5");
-  drawText("Chuột trái : Phép Khống Chế Từ Xa",   W - 408, H -  82, 15, "#cba9ff");
-  drawText("Enter : Bảng nhiệm vụ (gần NPC)",     W - 408, H -  62, 15, "#5dd968");
-  drawText("E : Cửa Hàng  ·  1-6 / Q : Đổi sức mạnh", W - 408, H -  42, 15, "#ffe18a");
+  // Hint phím - chỉ hiện trong countdown 10s đầu mỗi đảo (panel lớn 4 dòng).
+  // Sau countdown chỉ còn 1 dòng nhỏ ở chân màn hình để không cản tầm nhìn.
+  const inCountdown = (typeof countdownTimer !== "undefined") && countdownTimer > 0;
+  if (inCountdown) {
+    ctx.fillStyle = "rgba(14, 22, 48, 0.85)";
+    ctx.fillRect(W - 420, H - 110, 400, 90);
+    ctx.fillStyle = "#ffd24a";
+    ctx.fillRect(W - 420, H - 110, 3, 90);
+    drawText("← → : Đi   ↑ / Cách : Nhảy",              W - 408, H - 102, 15, "#dbe6f5");
+    drawText("Chuột trái : Phép Khống Chế Từ Xa",       W - 408, H -  82, 15, "#cba9ff");
+    drawText("Enter : Bảng nhiệm vụ (gần NPC)",         W - 408, H -  62, 15, "#5dd968");
+    drawText("E : Cửa Hàng  ·  1-6 / Q : Đổi sức mạnh", W - 408, H -  42, 15, "#ffe18a");
+  } else {
+    // Compact: 1 dòng mờ ở giữa chân màn hình
+    drawText("← → di chuyển  ·  ↑/Space nhảy  ·  Chuột bắn  ·  E shop  ·  Enter NPC",
+             W/2, H - 22, 12, "rgba(255,255,255,0.55)", "#000", "center");
+  }
 }

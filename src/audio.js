@@ -77,6 +77,17 @@ function sfxGameOver() {
   notes.forEach((f, i) => setTimeout(() =>
     playTone(f, 0.32, { type: "sawtooth", vol: 0.13 }), i * 200));
 }
+// Tiếng "thất bại" rõ rệt - deep tone + descending wail dài 1.5s
+function sfxFail() {
+  // Tone trầm bắt đầu mạnh
+  playTone(220, 0.6, { type: "sawtooth", endFreq: 60, vol: 0.18 });
+  // Sau 200ms thêm tiếng wail descending
+  setTimeout(() => playTone(330, 0.5, { type: "sawtooth", endFreq: 110, vol: 0.14 }), 200);
+  // Cuối cùng tiếng buồn thật trầm
+  setTimeout(() => playTone(110, 0.7, { type: "sine", endFreq: 50, vol: 0.16 }), 600);
+  // Nốt nhỏ kết thúc
+  setTimeout(() => playTone(82, 0.4, { type: "triangle", vol: 0.12 }), 1100);
+}
 
 // Nhạc nền: melody pirate kiểu La thứ, lặp vô tận khi đang chơi
 const BGM_NOTES = [

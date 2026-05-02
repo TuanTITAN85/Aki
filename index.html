@@ -76,6 +76,17 @@ ctx.imageSmoothingEnabled = false; // giữ nét pixel
 // Code chỉ đọc .value mỗi frame ở STATE.NAME_INPUT thay vì tự bắt keydown.
 const nameInputEl = document.getElementById("nameInput");
 
+// BGM bắt đầu ngay từ title screen sau user gesture đầu tiên (browser yêu cầu)
+let bgmInitialized = false;
+function startBGMOnFirstGesture() {
+  if (bgmInitialized) return;
+  bgmInitialized = true;
+  ensureAudio();
+  startBGM();
+}
+document.addEventListener("keydown",   startBGMOnFirstGesture, { once: true });
+document.addEventListener("mousedown", startBGMOnFirstGesture, { once: true });
+
 // Kích thước màn hình game
 const W = canvas.width;
 const H = canvas.height;
@@ -535,7 +546,7 @@ function update() {
     if (player.dead) {
       gameState = STATE.GAMEOVER;
       stopBGM();
-      sfxGameOver();
+      sfxFail();          // âm thanh thất bại đặc biệt khi chết
       commitScore(false);
     }
 

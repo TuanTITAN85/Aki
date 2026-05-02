@@ -456,6 +456,57 @@ function drawFruitImage(fruit, dx, dy, dw, dh) {
 }
 
 // =============================================================================
+// SPRITE SHEET ĐỒNG XU - 1 hàng × 4 cột (animation xoay)
+//   Frame 0: full front (mỏ neo rõ)
+//   Frame 1: 3/4 rotation
+//   Frame 2: side view (cạnh thanh)
+//   Frame 3: 3/4 rotation (mirror)
+// =============================================================================
+const COIN_SHEET = {
+  src: "assets/coin_sheet.png",
+  cols: 4, rows: 1,
+  frames: 4,
+  rate: 6,         // đổi frame mỗi 6 tick (10fps animation)
+  image: null, ready: false, frameW: 0, frameH: 0
+};
+
+function loadCoinSheet() {
+  AssetLoader.expect();
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = img.width;
+    c.height = img.height;
+    const cx = c.getContext("2d");
+    cx.drawImage(img, 0, 0);
+    chromaKey(c);                  // loại bg magenta
+    COIN_SHEET.image  = c;
+    COIN_SHEET.frameW = img.width  / COIN_SHEET.cols;
+    COIN_SHEET.frameH = img.height;
+    COIN_SHEET.ready  = true;
+    AssetLoader.done(true);
+  };
+  img.onerror = () => {
+    console.warn("Không tải được:", COIN_SHEET.src,
+                 "- coin sẽ vẽ bằng circle cũ");
+    AssetLoader.done(false);
+  };
+  img.src = COIN_SHEET.src;
+}
+loadCoinSheet();
+
+// Vẽ 1 frame đồng xu xoay tại (dx, dy) với kích thước (dw, dh)
+// animTime = bộ đếm frame để chọn frame phù hợp
+function drawCoinFrame(animTime, dx, dy, dw, dh) {
+  if (!COIN_SHEET.ready) return false;
+  const idx = Math.floor(animTime / COIN_SHEET.rate) % COIN_SHEET.frames;
+  const sx = idx * COIN_SHEET.frameW;
+  ctx.drawImage(COIN_SHEET.image, sx, 0, COIN_SHEET.frameW, COIN_SHEET.frameH,
+                dx, dy, dw, dh);
+  return true;
+}
+
+// =============================================================================
 // SPRITE SHEET CỦA CHÚ CÚN ĐỒNG HÀNH - 4x4 grid (idle/walk/run/attack)
 // =============================================================================
 const DOG_SHEET = {

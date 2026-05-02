@@ -373,17 +373,20 @@ let mouseClickConsumed = false;
 // Countdown 10s khi vào game/đảo mới: quái không đánh + player không bắn
 // Đếm theo frame (60fps) -> 600 frame = 10 giây
 let countdownTimer = 0;
-let companionDog = null;  // chú Cún đồng hành (null nếu chưa mua)
-let dogNameInput = "";   // chuỗi tên đang gõ cho Cún
+let companionDog  = null;  // chú Cún đồng hành (null nếu chưa mua)
+let companionDuck = null;  // chú Vịt đồng hành (null nếu chưa mua)
+let dogNameInput = "";   // chuỗi tên đang gõ cho Cún/Vịt
 let dogNameCursor = 0;   // bộ đếm nhấp nháy con trỏ
-let pendingDogPrice = 0; // giá Cún đã trừ khi vào màn hình đặt tên (để refund nếu ESC)
+let pendingDogPrice = 0; // giá companion đã trừ khi vào màn hình đặt tên (để refund nếu ESC)
+let pendingCompanionKind = "dog";  // "dog" hoặc "duck" - companion sắp tạo
 
 function startGame() {
   ensureAudio();              // tạo AudioContext sau khi user nhấn phím
   currentIslandIdx = 0;
   player = new Player(100, 400);
   player.name = (typedName.trim() || "Hải Tặc").slice(0, 14);
-  companionDog = null;        // reset Cún đồng hành khi bắt đầu lại
+  companionDog  = null;       // reset đồng hành khi bắt đầu lại
+  companionDuck = null;
   scoreSavedThisRound = false;
   lastSavedEntry = null;
   loadIsland(0);
@@ -471,7 +474,8 @@ function update() {
     // Thuyền
     for (const b of level.boats) b.update();
     // Chú Cún đồng hành
-    if (companionDog) companionDog.update(level, player);
+    if (companionDog)  companionDog.update(level, player);
+    if (companionDuck) companionDuck.update(level, player);
 
     // Đạn của người chơi
     for (let i = playerOrbs.length - 1; i >= 0; i--) {
@@ -604,18 +608,25 @@ function update() {
     updateParticles();
     if (noticeTimer > 0) noticeTimer--;
   } else if (gameState === STATE.DOG_NAME) {
-    // Xử lý nhập tên chú Cún
+    // Xử lý nhập tên đồng hành (Cún hoặc Vịt tùy pendingCompanionKind)
     if (input.enter) {
       input.enter = false;
-      const name = dogNameInput.trim() || "Buddy";
-      companionDog = new CompanionDog(player.x, player.y - 30, name);
-      showNotice("Chào " + name + "! Ta cùng đi nhé!", 240);
+      const isDuck = pendingCompanionKind === "duck";
+      const name = dogNameInput.trim() || (isDuck ? "Donald" : "Buddy");
+      if (isDuck) {
+        companionDuck = new CompanionDuck(player.x, player.y - 30, name);
+        showNotice("Chào Vịt " + name + "! Ta cùng đi nhé!", 240);
+      } else {
+        companionDog = new CompanionDog(player.x, player.y - 30, name);
+        showNotice("Chào Cún " + name + "! Ta cùng đi nhé!", 240);
+      }
       sfxCoin();
+      pendingDogPrice = 0;
       gameState = STATE.PLAYING;
     }
     if (input.esc) {
       input.esc = false;
-      // Refund vàng đã trừ khi vào màn hình tên Cún
+      // Refund vàng đã trừ khi vào màn hình tên đồng hành
       player.gold += pendingDogPrice;
       pendingDogPrice = 0;
       gameState = STATE.SHOP;
@@ -743,7 +754,8 @@ function draw() {
   // Người chơi
   player.draw(camera.x, camera.y);
   // Chú Cún đồng hành
-  if (companionDog) companionDog.draw(camera.x, camera.y);
+  if (companionDog)  companionDog.draw(camera.x, camera.y);
+  if (companionDuck) companionDuck.draw(camera.x, camera.y);
   // Hạt
   drawParticles(camera.x, camera.y);
 

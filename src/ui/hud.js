@@ -181,6 +181,36 @@ function drawHUD() {
            (player.swordTier > 0 ? `  (×${player.swordMultiplier()})` : ""),
            panelX + 64, panelY + 182, 15, swordCols[player.swordTier], "#000");
 
+  // === HP đồng hành (Cún + Vịt) - hiển thị nếu có ===
+  let compY = panelY + 210;
+  function drawCompanionRow(c, label, color) {
+    if (!c) return;
+    drawText(label + ":", panelX + 14, compY, 13, "#aef", "#000");
+    // tên + level
+    const nameStr = c.name + " Lv" + c.level;
+    drawText(nameStr, panelX + 56, compY, 13, color, "#000");
+    // HP bar mini
+    const r = clamp(c.hp / c.maxHp, 0, 1);
+    const cbX = panelX + 170, cbW = panelW - 184, cbH = 12;
+    if (c.alive) {
+      ctx.fillStyle = "rgba(255, 90, 90, 0.18)";
+      ctx.fillRect(cbX, compY - 1, cbW, cbH);
+      ctx.fillStyle = color;
+      ctx.fillRect(cbX, compY - 1, cbW * r, cbH);
+      drawText(Math.floor(c.hp) + "/" + c.maxHp, cbX + cbW/2, compY,
+               10, "#fff", "#000", "center");
+    } else {
+      // Đang chết -> ô xám + countdown
+      ctx.fillStyle = "rgba(120,120,120,0.4)";
+      ctx.fillRect(cbX, compY - 1, cbW, cbH);
+      drawText("Hồi sinh " + Math.ceil(c.respawnTimer / 60) + "s",
+               cbX + cbW/2, compY, 10, "#aaa", "#000", "center");
+    }
+    compY += 20;
+  }
+  if (companionDog)  drawCompanionRow(companionDog,  "Cún", "#e8b258");
+  if (companionDuck) drawCompanionRow(companionDuck, "Vịt", "#ffd24a");
+
   // === PANEL NHIỆM VỤ (phải) - tách riêng, kích thước nhỏ hơn ===
   const qpX = W - 300, qpY = 20, qpW = 280;
   const qpH = 40 + Math.max(1, quests.length) * 22 + 8;   // tự co theo số quest

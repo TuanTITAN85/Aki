@@ -108,10 +108,11 @@ const DOG_ATTACK_2 = [
   "..X........X.."
 ];
 
-// CompanionDog — chú Cún đồng hành
+// CompanionDog — chú Cún đồng hành (DPS - dame cao, HP thấp)
 class CompanionDog {
   constructor(x, y, name) {
     this.name = name || "Buddy";
+    this.kind = "dog";        // dùng để phân biệt với Vịt + skill key
     this.x = x;
     this.y = y;
     this.w = 36;
@@ -124,13 +125,41 @@ class CompanionDog {
     this.attackCD = 0;        // cooldown giữa 2 lần cắn
     this.attackTimer = 0;     // thời gian animation cắn đang chạy
     this.targetEnemy = null;
-    this.alive = true;
 
-    // Thông số
-    this.DOG_RANGE = 300;     // bán kính phát hiện enemy (pixel)
-    this.DOG_BITE_DIST = 44;  // khoảng cách để cắn được enemy
-    this.DOG_DAMAGE = 20;     // sát thương mỗi lần cắn
-    this.DOG_SPEED = 3.2;     // tốc độ chạy tới enemy
+    // HP system
+    this.maxHp = 50;
+    this.hp = 50;
+    this.alive = true;
+    this.respawnTimer = 0;    // khi chết: đếm ngược 30s (1800 frame @ 60fps)
+    this.invul = 0;           // invul ngắn sau khi bị đánh
+
+    // Upgrade level (nâng cấp ở shop)
+    this.level = 1;
+
+    // Thông số chiến đấu
+    this.DOG_RANGE = 300;
+    this.DOG_BITE_DIST = 44;
+    this.DOG_DAMAGE = 20;
+    this.DOG_SPEED = 3.2;
+  }
+
+  // Cún bị đánh - giảm hp, particles, invul ngắn
+  takeDamage(dmg) {
+    if (this.invul > 0 || !this.alive) return;
+    this.hp -= dmg;
+    this.invul = 24;
+    spawnParticles(this.x + this.w/2, this.y + this.h/2, {
+      count: 8, color: "#ff4040", speed: 3, size: 2, life: 20
+    });
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.alive = false;
+      this.respawnTimer = 1800;     // 30s respawn
+      // hiệu ứng chết - particles vàng + xám
+      spawnParticles(this.x + this.w/2, this.y + this.h/2, {
+        count: 18, color: "#bbbbbb", speed: 4, size: 3, life: 40
+      });
+    }
   }
 
   // Tìm enemy gần nhất trong tầm
@@ -171,6 +200,24 @@ class CompanionDog {
     this.animTime++;
     if (this.attackCD > 0) this.attackCD--;
     if (this.attackTimer > 0) this.attackTimer--;
+    if (this.invul > 0) this.invul--;
+
+    // Khi chết: đếm ngược 30s rồi respawn tại player
+    if (!this.alive) {
+      this.respawnTimer--;
+      if (this.respawnTimer <= 0) {
+        this.alive = true;
+        this.hp = this.maxHp;
+        this.x = player.x;
+        this.y = player.y - 30;
+        this.vx = 0; this.vy = 0;
+        this.invul = 60;
+        spawnParticles(this.x + this.w/2, this.y + this.h/2, {
+          count: 14, color: "#ffd700", speed: 3, size: 3, life: 30, shape: "star"
+        });
+      }
+      return;       // không cập nhật AI khi đang chết
+    }
 
     // Tìm enemy gần nhất
     const target = this._findNearestEnemy(level);
@@ -241,6 +288,27 @@ class CompanionDog {
     const sx = this.x - camX;
     const sy = this.y - camY;
 
+    // Khi chết: hiện ghost icon nhỏ + countdown text
+    if (!this.alive) {
+      const sec = Math.ceil(this.respawnTimer / 60);
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = "#dde6f0";
+      ctx.beginPath();
+      ctx.arc(sx + this.w/2, sy + this.h/2, 14, Math.PI, 0);
+      ctx.fillRect(sx + this.w/2 - 14, sy + this.h/2, 28, 12);
+      // 2 chấm mắt đen
+      ctx.fillStyle = "#000";
+      ctx.fillRect(sx + this.w/2 - 6, sy + this.h/2 - 4, 3, 3);
+      ctx.fillRect(sx + this.w/2 + 3, sy + this.h/2 - 4, 3, 3);
+      ctx.globalAlpha = 1;
+      drawText(this.name, sx + this.w/2, sy - 18, 11, "#aaa", "#000", "center");
+      drawText("Hồi sinh " + sec + "s", sx + this.w/2, sy - 6, 12, "#7afc6e", "#000", "center");
+      return;
+    }
+
+    // Nhấp nháy khi đang invul (vừa bị đánh)
+    if (this.invul > 0 && Math.floor(this.invul / 4) % 2 === 0) return;
+
     // Ưu tiên sprite sheet PNG nếu đã tải xong
     let drawn = false;
     let nameY = sy - 10;     // mặc định cho fallback
@@ -278,5 +346,132 @@ class CompanionDog {
 
     // Vẽ tên phía trên đầu Cún (vị trí được tính theo sprite render hoặc fallback)
     drawText(this.name, sx + this.w/2, nameY, 12, "#ffd700", "#000", "center");
+  }
+}
+
+// =============================================================================
+// CompanionDuck - Vịt Vàng đồng hành (TANK - HP cao, dame thấp, chậm)
+// Cùng pattern với CompanionDog, khác stats và sprite (pixel art tạm tới khi
+// có asset PNG riêng)
+// =============================================================================
+const DUCK_PALETTE = {
+  Y: "#ffd24a",   // lông vàng
+  D: "#a87a14",   // shadow vàng
+  O: "#ff8a3c",   // mỏ + chân cam
+  W: "#ffffff",   // mắt sáng
+  K: "#1a1a1a",   // viền + mắt đen
+  R: "#d33b3b"    // chấm má hồng
+};
+const DUCK_IDLE_1 = [
+  ".....KKKKK....",
+  "....KYYYYYK...",
+  "...KYYYYYYYK..",
+  "...KYWKYWKYK..",
+  "...KYYYYYYYK..",
+  "...OOKYYYYK...",
+  "....KYYYYYK...",
+  "...KYYYYYYYK..",
+  "...KYYYYYYYK..",
+  "....KKOOKK....",
+  "....OOOOOO....",
+  "..............",
+  "..............",
+  ".............."
+];
+const DUCK_IDLE_2 = [
+  ".....KKKKK....",
+  "....KYYYYYK...",
+  "...KYYYYYYYK..",
+  "...KYWKYWKYK..",
+  "...KYYYYYYYK..",
+  "...OOKYYYYK...",
+  "....KYYYYYK...",
+  "..KYYYYYYYYK..",
+  "...KYYYYYYK...",
+  "....KKOOKK....",
+  "...OOOOOOOO...",
+  "..............",
+  "..............",
+  ".............."
+];
+const DUCK_WALK_1 = DUCK_IDLE_1;
+const DUCK_WALK_2 = DUCK_IDLE_2;
+const DUCK_ATTACK_1 = DUCK_IDLE_1;
+const DUCK_ATTACK_2 = DUCK_IDLE_2;
+
+class CompanionDuck {
+  constructor(x, y, name) {
+    this.name = name || "Donald";
+    this.kind = "duck";
+    this.x = x;
+    this.y = y;
+    this.w = 36;
+    this.h = 30;
+    this.vx = 0;
+    this.vy = 0;
+    this.facing = 1;
+    this.state = "idle";
+    this.animTime = 0;
+    this.attackCD = 0;
+    this.attackTimer = 0;
+    this.targetEnemy = null;
+
+    // HP system - TANK: HP cao gấp đôi Cún
+    this.maxHp = 100;
+    this.hp = 100;
+    this.alive = true;
+    this.respawnTimer = 0;
+    this.invul = 0;
+    this.level = 1;
+
+    // Thông số TANK - chậm hơn Cún, tầm gần hơn, ít dame hơn
+    this.DOG_RANGE = 250;      // tầm gần hơn (vs Cún 300)
+    this.DOG_BITE_DIST = 44;
+    this.DOG_DAMAGE = 10;      // dame thấp hơn (vs Cún 20)
+    this.DOG_SPEED = 2.5;      // chậm hơn (vs Cún 3.2)
+  }
+
+  // Reuse logic từ Dog (gắn các method qua prototype)
+  takeDamage(dmg)             { return CompanionDog.prototype.takeDamage.call(this, dmg); }
+  _findNearestEnemy(level)    { return CompanionDog.prototype._findNearestEnemy.call(this, level); }
+  _collide(level, axis)       { return CompanionDog.prototype._collide.call(this, level, axis); }
+  update(level, player)       { return CompanionDog.prototype.update.call(this, level, player); }
+
+  draw(camX, camY) {
+    const sx = this.x - camX;
+    const sy = this.y - camY;
+
+    // Khi chết: ghost icon vàng
+    if (!this.alive) {
+      const sec = Math.ceil(this.respawnTimer / 60);
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = "#fff5a0";
+      ctx.beginPath();
+      ctx.arc(sx + this.w/2, sy + this.h/2, 14, Math.PI, 0);
+      ctx.fillRect(sx + this.w/2 - 14, sy + this.h/2, 28, 12);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(sx + this.w/2 - 6, sy + this.h/2 - 4, 3, 3);
+      ctx.fillRect(sx + this.w/2 + 3, sy + this.h/2 - 4, 3, 3);
+      ctx.globalAlpha = 1;
+      drawText(this.name, sx + this.w/2, sy - 18, 11, "#aaa", "#000", "center");
+      drawText("Hồi sinh " + sec + "s", sx + this.w/2, sy - 6, 12, "#7afc6e", "#000", "center");
+      return;
+    }
+
+    if (this.invul > 0 && Math.floor(this.invul / 4) % 2 === 0) return;
+
+    // Hiện chưa có DUCK_SHEET PNG → dùng pixel matrix tạm
+    const t = this.animTime;
+    let grid;
+    if (this.state === "attack") {
+      grid = (this.attackTimer > 9) ? DUCK_ATTACK_1 : DUCK_ATTACK_2;
+    } else if (this.state === "walk") {
+      grid = (Math.floor(t / 8) % 2 === 0) ? DUCK_WALK_1 : DUCK_WALK_2;
+    } else {
+      grid = (Math.floor(t / 22) % 2 === 0) ? DUCK_IDLE_1 : DUCK_IDLE_2;
+    }
+    drawPixelSprite(grid, DUCK_PALETTE, sx, sy, 3, this.facing < 0);
+
+    drawText(this.name, sx + this.w/2, sy - 10, 12, "#ffd700", "#000", "center");
   }
 }

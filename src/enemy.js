@@ -225,9 +225,22 @@ class Enemy {
     if (!inCountdown && rectsHit(this, player) && this.attackCD <= 0) {
       player.takeDamage(this.dmg);
       this.attackCD = 40;
-      // đẩy lùi
       player.vx = Math.sign(dx || 1) * 6;
       player.vy = -7;
+    }
+
+    // Đánh đồng hành (Cún + Vịt) nếu chạm - dame nhẹ hơn so với đánh player
+    if (!inCountdown && this.attackCD <= 0) {
+      if (typeof companionDog !== "undefined" && companionDog && companionDog.alive
+          && rectsHit(this, companionDog)) {
+        companionDog.takeDamage(Math.floor(this.dmg * 0.5));
+        this.attackCD = 40;
+      } else if (typeof companionDuck !== "undefined" && companionDuck && companionDuck.alive
+                 && rectsHit(this, companionDuck)) {
+        // Vịt là TANK, ăn dame thấp hơn nữa
+        companionDuck.takeDamage(Math.floor(this.dmg * 0.35));
+        this.attackCD = 40;
+      }
     }
     if (this.attackCD > 0) this.attackCD--;
     if (this.hitFlash > 0) this.hitFlash--;

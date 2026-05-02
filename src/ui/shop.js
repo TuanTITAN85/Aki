@@ -28,19 +28,28 @@ const SHOP_ITEMS = [
   { id:"sword_bronze", kind:"sword", tier:1, name:"Kiếm Đồng", desc:"+20% sát thương",  price:150, cat:"sword" },
   { id:"sword_silver", kind:"sword", tier:2, name:"Kiếm Bạc",  desc:"+50% sát thương",  price:380, cat:"sword" },
   { id:"sword_gold",   kind:"sword", tier:3, name:"Kiếm Vàng", desc:"+100% sát thương", price:800, cat:"sword" },
-  { id:"companion_dog", kind:"companion", name:"Chú Cún Golden Retriever",
-    desc:"Cắn lính/thú trong phạm vi ~300px", price:200, cat:"companion" }
+  { id:"companion_dog",  kind:"companion", companionKind:"dog",
+    name:"Chú Cún Golden Retriever",
+    desc:"DPS - dame cao, máu thấp (300px range)",  price:200, cat:"companion" },
+  { id:"companion_duck", kind:"companion", companionKind:"duck",
+    name:"Vịt Vàng Donald",
+    desc:"TANK - máu cao, dame thấp (250px range)", price:250, cat:"companion" },
+  { id:"upgrade_companion", kind:"upgrade_companion",
+    name:"Nâng Cấp Đồng Hành",
+    desc:"+25 HP, +10 dame mỗi cấp (giá tăng 100/lần)",
+    price:100, cat:"upgrade" }
 ];
 
 // Tab hiện tại
-let shopTab = "hp"; // "hp" | "fruit" | "sword" | "companion"
+let shopTab = "hp"; // "hp" | "fruit" | "sword" | "companion" | "upgrade"
 
 // Các tab
 const SHOP_TABS = [
-  { id:"hp",         label:"Hồi Phẩm",    icon:"+",  color:"#ff6a6a" },
-  { id:"fruit",      label:"Trái Ác Quỷ", icon:"●",  color:"#d48aff" },
-  { id:"sword",      label:"Kiếm",         icon:"⚔", color:"#ffd24a" },
-  { id:"companion",   label:"Đồng Hành",   icon:"🐕", color:"#d4a050" }
+  { id:"hp",        label:"Hồi Phẩm",    icon:"+",  color:"#ff6a6a" },
+  { id:"fruit",     label:"Trái Ác Quỷ", icon:"●",  color:"#d48aff" },
+  { id:"sword",     label:"Kiếm",        icon:"⚔",  color:"#ffd24a" },
+  { id:"companion", label:"Đồng Hành",   icon:"🐕", color:"#d4a050" },
+  { id:"upgrade",   label:"Nâng Cấp",    icon:"↑",  color:"#5dccff" }
 ];
 
 // Bố cục cửa hàng (tất cả tọa độ canvas tuyệt đối)
@@ -89,7 +98,23 @@ function buyShopItem(item) {
     sfxCoin();
     return;
   }
-  if (player.gold < item.price) {
+  // Tính giá thực tế (upgrade có giá tăng theo level)
+  let actualPrice = item.price;
+  if (item.kind === "upgrade_companion") {
+    // Giá nâng cấp = 100 * (totalLevel) - tăng dần
+    const dogLv  = (typeof companionDog  !== "undefined" && companionDog)  ? companionDog.level  : 0;
+    const duckLv = (typeof companionDuck !== "undefined" && companionDuck) ? companionDuck.level : 0;
+    const totalLv = dogLv + duckLv;
+    if (totalLv === 0) {
+      showNotice("Cần mua đồng hành (Cún hoặc Vịt) trước khi nâng cấp!", 150);
+      sfxHurt();
+      return;
+    }
+    actualPrice = 100 * totalLv;
+  }
+
+  // === PHASE 1: Check ALL conditions ===
+  if (player.gold < actualPrice) {
     showNotice("Không đủ vàng để mua " + item.name + "!", 90);
     sfxHurt();
     return;
@@ -99,11 +124,28 @@ function buyShopItem(item) {
     sfxHurt();
     return;
   }
-  player.gold -= item.price;
-  if (item.kind === "heal")       player.hp = Math.min(player.maxHp, player.hp + 30);
+  if (item.kind === "companion") {
+    // Check trùng companion theo kind
+    if (item.companionKind === "dog" && companionDog) {
+      showNotice("Bạn đã có Cún rồi!", 180);
+      sfxHurt();
+      return;
+    }
+    if (item.companionKind === "duck" && companionDuck) {
+      showNotice("Bạn đã có Vịt rồi!", 180);
+      sfxHurt();
+      return;
+    }
+  }
+
+  // === PHASE 2: Trừ vàng (atomic - 1 lần duy nhất, không trùng) ===
+  player.gold -= actualPrice;
+
+  // === PHASE 3: Apply effect ===
+  if (item.kind === "heal")        player.hp = Math.min(player.maxHp, player.hp + 30);
   else if (item.kind === "heal_full") player.hp = player.maxHp;
   else if (item.kind === "max_hp") { player.maxHp += 20; player.hp += 20; }
-  else if (item.kind === "life")   player.lives += 1;
+  else if (item.kind === "life")    player.lives += 1;
   else if (item.kind === "fruit") {
     player.acquireFruit(item.fruit);
     showNotice("Đã mua " + item.name + "! Bấm 1-6 để đổi qua lại.", 180);
@@ -113,24 +155,34 @@ function buyShopItem(item) {
     showNotice("Bạn vừa nhận " + item.name + "!", 150);
   }
   else if (item.kind === "companion") {
-    // Chuyển sang màn hình nhập tên Cún
-    if (companionDog) {
-      showNotice("Bạn đã có Cún rồi!", 180);
-      sfxHurt();
-      return;
-    }
-    if (player.gold < item.price) {
-      showNotice("Không đủ vàng!", 180);
-      sfxHurt();
-      return;
-    }
+    // Chuyển sang màn hình nhập tên (Cún hoặc Vịt)
     gameState = STATE.DOG_NAME;
     dogNameInput = "";
-    // Trừ vàng ngay để không bị refund khi user escape
-    player.gold -= item.price;
-    pendingDogPrice = item.price; // lưu lại để refund khi escape
-    return;
+    pendingDogPrice = actualPrice;        // refund khi escape
+    pendingCompanionKind = item.companionKind || "dog";
+    sfxCoin();                            // tiếng confirm trước khi đổi state
+    return;                               // quay ra ngay (đổi state -> shop đóng)
   }
+  else if (item.kind === "upgrade_companion") {
+    // Tăng level cho TẤT CẢ companion đang có (dog + duck)
+    let upgraded = [];
+    if (companionDog) {
+      companionDog.level++;
+      companionDog.maxHp += 25;
+      companionDog.hp     = companionDog.maxHp;       // heal full khi nâng
+      companionDog.DOG_DAMAGE += 10;
+      upgraded.push("Cún " + companionDog.name);
+    }
+    if (companionDuck) {
+      companionDuck.level++;
+      companionDuck.maxHp += 25;
+      companionDuck.hp     = companionDuck.maxHp;
+      companionDuck.DOG_DAMAGE += 10;
+      upgraded.push("Vịt " + companionDuck.name);
+    }
+    showNotice("Đã nâng cấp: " + upgraded.join(", ") + "!", 200);
+  }
+
   sfxCoin();
   spawnParticles(player.x + player.w/2, player.y + player.h/2, {
     count: 18, color: "#fff5a0", speed: 4, size: 3, life: 30, shape: "star"

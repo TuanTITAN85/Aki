@@ -370,6 +370,9 @@ let questFlash = 0;    // hiệu ứng nhấp nháy khi nhận / hoàn thành nh
 let questNotice = "";  // chữ thông báo nhiệm vụ ở giữa màn hình
 let noticeTimer = 0;
 let mouseClickConsumed = false;
+// Countdown 10s khi vào game/đảo mới: quái không đánh + player không bắn
+// Đếm theo frame (60fps) -> 600 frame = 10 giây
+let countdownTimer = 0;
 let companionDog = null;  // chú Cún đồng hành (null nếu chưa mua)
 let dogNameInput = "";   // chuỗi tên đang gõ cho Cún
 let dogNameCursor = 0;   // bộ đếm nhấp nháy con trỏ
@@ -397,6 +400,7 @@ function loadIsland(idx) {
   player.hp = player.maxHp;
   playerOrbs.length = 0;
   enemyOrbs.length = 0;
+  countdownTimer = 600;        // 10s đếm ngược, quái không đánh + player không bắn
   particles.length = 0;
   showNotice("Chào mừng đến " + level.name + "! Đến gặp người dân (chấm than vàng) để nhận nhiệm vụ.");
 }
@@ -411,10 +415,14 @@ function showNotice(msg, time = 240) {
 // ===========================================================================
 function update() {
   if (gameState === STATE.PLAYING) {
+    // Đếm ngược countdown khi vào game/đảo mới (10s)
+    if (countdownTimer > 0) countdownTimer--;
+
     player.update(input, level);
 
-    // Nhân vật chính bắn đạn ma thuật khi click chuột
-    if (input.mouseDown && !mouseClickConsumed && player.attackCooldown <= 0) {
+    // Nhân vật chính bắn đạn ma thuật khi click chuột (chặn nếu đang countdown)
+    if (input.mouseDown && !mouseClickConsumed && player.attackCooldown <= 0
+        && countdownTimer <= 0) {
       const tx = input.mouseX + camera.x;
       const ty = input.mouseY + camera.y;
       const cfg = POWERS[player.power] || POWERS.default;
@@ -745,6 +753,9 @@ function draw() {
   // Vẽ UI
   drawPowerBar();
   drawHUD();
+
+  // Overlay countdown nếu đang đếm ngược (10s đầu mỗi đảo)
+  drawCountdownOverlay();
 
   // Thông báo gần NPC
   for (const n of level.npcs) {

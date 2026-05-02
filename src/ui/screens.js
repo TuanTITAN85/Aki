@@ -158,6 +158,33 @@ function drawQuestPanel() {
 }
 
 // =============================================================================
+// Overlay COUNTDOWN - đếm ngược 10s khi vào game / đảo mới
+// Vẽ đè lên world bình thường (game vẫn render player + map). Quái không đánh,
+// player không bắn (xử lý ở update() loop và Player/Enemy update).
+// =============================================================================
+function drawCountdownOverlay() {
+  if (typeof countdownTimer === "undefined" || countdownTimer <= 0) return;
+  const seconds = Math.ceil(countdownTimer / 60);
+  // Số to giữa màn hình + animation pulse
+  const pulse = 1 + 0.15 * Math.sin(countdownTimer * 0.3);
+  const fontSize = 180 * pulse;
+  // Background dim nhẹ
+  ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+  ctx.fillRect(0, 0, W, H);
+  // Số đếm
+  drawText(seconds.toString(),
+           W/2, H/2 - 100, fontSize, "#ffd24a", "#3a1a06", "center");
+  // Text "Sẵn sàng!" phía trên
+  drawText("SẴN SÀNG!",
+           W/2, H/2 - 180, 36, "#fff", "#000", "center");
+  // Hint: làm quen điều khiển
+  drawText("Di chuyển + làm quen với địa hình",
+           W/2, H/2 + 100, 22, "#aef", "#000", "center");
+  drawText("(Chuột trái + 1-6 sẽ kích hoạt khi đếm về 0)",
+           W/2, H/2 + 130, 16, "rgba(255,255,255,0.6)", "#000", "center");
+}
+
+// =============================================================================
 // Màn hình TẠM DỪNG - khi user chuyển tab / mất focus cửa sổ
 // Hiển thị overlay tối + thông báo + hint Enter để tiếp tục.
 // =============================================================================

@@ -149,12 +149,16 @@ class Enemy {
   update(level, player) {
     if (!this.alive) return;
 
+    // Trong giai đoạn countdown: quái không di chuyển + không đánh + không bắn
+    // (vẫn rơi theo trọng lực + va chạm để không lộn xộn vị trí)
+    const inCountdown = (typeof countdownTimer !== "undefined") && countdownTimer > 0;
+
     const dx = (player.x + player.w/2) - (this.x + this.w/2);
     const dy = (player.y + player.h/2) - (this.y + this.h/2);
     const dist = Math.hypot(dx, dy);
 
-    // Tìm thấy người chơi -> đuổi (phạm vi xa hơn)
-    if (dist < (this.boss ? 800 : 460)) this.aggro = true;
+    // Tìm thấy người chơi -> đuổi (chặn nếu đang countdown)
+    if (!inCountdown && dist < (this.boss ? 800 : 460)) this.aggro = true;
 
     let speed = this.boss ? 3.4 : (this.kind === "beast" ? 3.6 : 2.6);
 
@@ -217,8 +221,8 @@ class Enemy {
     this.y += this.vy;
     this._collide(level, "y");
 
-    // Đánh người chơi nếu chạm
-    if (rectsHit(this, player) && this.attackCD <= 0) {
+    // Đánh người chơi nếu chạm (chặn nếu đang countdown)
+    if (!inCountdown && rectsHit(this, player) && this.attackCD <= 0) {
       player.takeDamage(this.dmg);
       this.attackCD = 40;
       // đẩy lùi

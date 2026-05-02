@@ -63,24 +63,15 @@ class Item {
     const yOff = Math.sin(this.bob) * 4;
     const cx = this.x - camX, cy = this.y - camY + yOff;
     if (this.kind === "coin") {
-      // Đồng xu vàng - ưu tiên sprite sheet xoay (4 frame), fallback circle
-      // Animation tự xoay theo bob counter (đã có sẵn cho yOff)
-      const dispW = 32, dispH = 32;
-      const dispX = cx + this.w/2 - dispW/2;
-      const dispY = cy + this.h/2 - dispH/2;
-      // bob là rad, nhân lên để có animTime đủ nhanh
-      const animTime = Math.floor(this.bob * 10);
-      if (!drawCoinFrame(animTime, dispX, dispY, dispW, dispH)) {
-        // Fallback: vòng tròn $ cũ
-        ctx.fillStyle = "#fff5a0";
-        ctx.beginPath(); ctx.arc(cx + 12, cy + 12, 12, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "#f5c542";
-        ctx.beginPath(); ctx.arc(cx + 12, cy + 12, 9, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "#a87a14";
-        ctx.font = "bold 14px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("$", cx + 12, cy + 17);
-      }
+      // tiền vàng tròn
+      ctx.fillStyle = "#fff5a0";
+      ctx.beginPath(); ctx.arc(cx + 12, cy + 12, 12, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#f5c542";
+      ctx.beginPath(); ctx.arc(cx + 12, cy + 12, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#a87a14";
+      ctx.font = "bold 14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("$", cx + 12, cy + 17);
     } else {
       // Trái ác quỷ - dùng PNG asset (1024x1024 source, scale xuống 36x36)
       // căn giữa collision box 28x28, có hiệu ứng bồng bềnh từ yOff

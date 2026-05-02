@@ -85,6 +85,17 @@ function shopTabItems() {
   return SHOP_ITEMS.filter(it => it.cat === shopTab);
 }
 
+// Tính giá thực tế cho một item (upgrade_companion tăng theo tổng level)
+function shopItemPrice(item) {
+  if (item.kind === "upgrade_companion") {
+    const dogLv  = (typeof companionDog  !== "undefined" && companionDog)  ? companionDog.level  : 0;
+    const duckLv = (typeof companionDuck !== "undefined" && companionDuck) ? companionDuck.level : 0;
+    const totalLv = dogLv + duckLv;
+    return totalLv === 0 ? item.price : 100 * totalLv;
+  }
+  return item.price;
+}
+
 // Mua một mặt hàng
 function buyShopItem(item) {
   // Đã sở hữu trái này -> bấm là đổi miễn phí (không tốn vàng)
@@ -99,19 +110,16 @@ function buyShopItem(item) {
     return;
   }
   // Tính giá thực tế (upgrade có giá tăng theo level)
-  let actualPrice = item.price;
   if (item.kind === "upgrade_companion") {
-    // Giá nâng cấp = 100 * (totalLevel) - tăng dần
     const dogLv  = (typeof companionDog  !== "undefined" && companionDog)  ? companionDog.level  : 0;
     const duckLv = (typeof companionDuck !== "undefined" && companionDuck) ? companionDuck.level : 0;
-    const totalLv = dogLv + duckLv;
-    if (totalLv === 0) {
+    if (dogLv + duckLv === 0) {
       showNotice("Cần mua đồng hành (Cún hoặc Vịt) trước khi nâng cấp!", 150);
       sfxHurt();
       return;
     }
-    actualPrice = 100 * totalLv;
   }
+  const actualPrice = shopItemPrice(item);
 
   // === PHASE 1: Check ALL conditions ===
   if (player.gold < actualPrice) {
@@ -323,11 +331,16 @@ function drawShop() {
     const it = items[i];
     const r  = shopCardRect(i);
 
-    const enough     = player.gold >= it.price;
+    const itPrice    = shopItemPrice(it);
+    const enough     = player.gold >= itPrice;
     const ownedFruit = it.kind === "fruit" && player.inventory.includes(it.fruit);
     const activeFruit= it.kind === "fruit" && player.power === it.fruit;
     const ownedSword = it.kind === "sword" && player.swordTier >= it.tier;
-    const ownedCompanion = it.kind === "companion" && companionDog;
+    // Companion ownership phải khớp theo companionKind (dog/duck), không lẫn lộn
+    const ownedCompanion = it.kind === "companion" && (
+      (it.companionKind === "dog"  && typeof companionDog  !== "undefined" && companionDog) ||
+      (it.companionKind === "duck" && typeof companionDuck !== "undefined" && companionDuck)
+    );
 
     // hover (chuột nằm trong)
     const hover = (input.mouseX >= r.x && input.mouseX <= r.x + r.w &&
@@ -383,7 +396,7 @@ function drawShop() {
       drawText("ĐÃ CÓ", r.x + r.w - 14, r.y + r.h - 28, 18, "#7afc6e", "#000", "right");
     } else {
       const priceCol = enough ? "#fff5a0" : "#ff6a6a";
-      drawText(it.price + " 💰", r.x + r.w - 14, r.y + r.h - 28, 22, priceCol, "#000", "right");
+      drawText(itPrice + " 💰", r.x + r.w - 14, r.y + r.h - 28, 22, priceCol, "#000", "right");
       drawText(enough ? "[Bấm mua]" : "[Thiếu vàng]",
                r.x + 94, r.y + r.h - 28, 13, enough ? "#7afc6e" : "#ff6a6a", "#000");
     }

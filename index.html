@@ -355,7 +355,7 @@ window.addEventListener("blur", () => {
 // =====================================================================
 // Chuyển tab cửa hàng (+1 hoặc -1)
 function switchShopTab(dir) {
-  const tabs = ["hp", "fruit", "sword", "companion"];
+  const tabs = ["hp", "fruit", "sword", "companion", "upgrade"];
   const idx = tabs.indexOf(shopTab);
   shopTab = tabs[(idx + dir + tabs.length) % tabs.length];
 }

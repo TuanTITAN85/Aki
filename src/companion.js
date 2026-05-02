@@ -316,18 +316,14 @@ class CompanionDog {
       const dispH = this.h * 2.5;
       const dispW = dispH * (DOG_SHEET.frameW / DOG_SHEET.frameH);
       const dx = sx + this.w/2 - dispW/2;
-      // Source frame có whitespace ở dưới -> push display dy xuống ~+20px
-      // để chân nhân vật chạm sát đáy collision (ground level)
-      const dy = sy + this.h - dispH + 20;
+      // Chân Cún chạm sát đáy collision (ground level) - như Player
+      const dy = sy + this.h - dispH;
       // Map state -> sprite row: walk + đang đuổi enemy => "run"
       let animState = this.state;
       if (this.state === "walk" && this.targetEnemy) animState = "run";
       drawn = drawDogSpriteFrame(animState, this.animTime,
                                  dx, dy, dispW, dispH, this.facing < 0);
-      // Tên hiển thị TRÊN ĐỈNH SPRITE (không đè mặt Cún như trước)
-      // dy là top của display, character bên trong frame có whitespace ~20-25px
-      // nên thực tế đỉnh đầu ở khoảng dy + 25; đặt name cách trên thêm 14px
-      nameY = dy + 16;
+      nameY = dy + 4;
     }
 
     if (!drawn) {
@@ -467,13 +463,13 @@ class CompanionDuck {
       const dispH = this.h * 2.5;
       const dispW = dispH * (DUCK_SHEET.frameW / DUCK_SHEET.frameH);
       const dx = sx + this.w/2 - dispW/2;
-      // Source frame có whitespace ở dưới -> push display dy xuống ~+20px
-      const dy = sy + this.h - dispH + 20;
+      // Chân Vịt chạm sát đáy collision (ground level) - như Player
+      const dy = sy + this.h - dispH;
       let animState = this.state;
       if (this.state === "walk" && this.targetEnemy) animState = "run";
       drawn = drawDuckSpriteFrame(animState, this.animTime,
                                   dx, dy, dispW, dispH, this.facing < 0);
-      nameY = dy + 16;
+      nameY = dy + 4;
     }
 
     if (!drawn) {

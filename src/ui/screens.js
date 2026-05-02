@@ -290,62 +290,24 @@ function drawDogNamePanel() {
   ctx.fillStyle = "#ffd24a";
   ctx.fillRect(px, py, pw, 4);    // vạch nhấn đỉnh
 
-  // Tiêu đề
-  drawText("ĐẶT TÊN CHO CHÚ CÚN", W/2, py + 44, 34, "#ffd24a", "#000", "center");
-  drawText("Chú Cún sẽ đồng hành cùng bạn suốt hành trình!",
-           W/2, py + 80, 18, "#aef", "#000", "center");
+  // Branch theo loại companion đang đặt tên
+  const isDuck = (typeof pendingCompanionKind !== "undefined" && pendingCompanionKind === "duck");
 
-  // Vẽ hình con Cún bằng canvas primitives (golden retriever đơn giản)
+  // Tiêu đề + subtitle
+  if (isDuck) {
+    drawText("ĐẶT TÊN CHO VỊT VÀNG", W/2, py + 44, 34, "#ffd24a", "#000", "center");
+    drawText("Vịt Vàng tank trâu sẽ chắn đòn cho bạn!",
+             W/2, py + 80, 18, "#aef", "#000", "center");
+  } else {
+    drawText("ĐẶT TÊN CHO CHÚ CÚN", W/2, py + 44, 34, "#ffd24a", "#000", "center");
+    drawText("Chú Cún sẽ đồng hành cùng bạn suốt hành trình!",
+             W/2, py + 80, 18, "#aef", "#000", "center");
+  }
+
+  // Vẽ minh hoạ companion (Cún hoặc Vịt) ở giữa panel
   const cx = W/2, cy = py + 200;
-  // Body
-  ctx.fillStyle = "#d4a050";
-  ctx.beginPath(); ctx.ellipse(cx, cy, 80, 48, 0, 0, Math.PI * 2); ctx.fill();
-  // Shadow / darker back
-  ctx.fillStyle = "#a07030";
-  ctx.beginPath(); ctx.ellipse(cx - 10, cy, 55, 30, 0, 0, Math.PI * 2); ctx.fill();
-  // Head
-  ctx.fillStyle = "#d4a050";
-  ctx.beginPath(); ctx.ellipse(cx + 80, cy - 10, 38, 32, 0, 0, Math.PI * 2); ctx.fill();
-  // Ear left
-  ctx.fillStyle = "#a07030";
-  ctx.beginPath(); ctx.ellipse(cx + 65, cy - 38, 14, 20, -0.3, 0, Math.PI * 2); ctx.fill();
-  // Ear right
-  ctx.beginPath(); ctx.ellipse(cx + 95, cy - 36, 14, 20, 0.3, 0, Math.PI * 2); ctx.fill();
-  // Snout
-  ctx.fillStyle = "#ffd6a8";
-  ctx.beginPath(); ctx.ellipse(cx + 112, cy - 2, 18, 14, 0, 0, Math.PI * 2); ctx.fill();
-  // Nose
-  ctx.fillStyle = "#1a1a1a";
-  ctx.beginPath(); ctx.ellipse(cx + 126, cy - 4, 7, 6, 0, 0, Math.PI * 2); ctx.fill();
-  // Eye
-  ctx.beginPath(); ctx.arc(cx + 92, cy - 14, 6, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#fff";
-  ctx.beginPath(); ctx.arc(cx + 93, cy - 15, 2, 0, Math.PI * 2); ctx.fill();
-  // Tail
-  ctx.fillStyle = "#d4a050";
-  ctx.beginPath();
-  ctx.moveTo(cx - 75, cy - 20);
-  ctx.quadraticCurveTo(cx - 110, cy - 60, cx - 90, cy - 80);
-  ctx.quadraticCurveTo(cx - 70, cy - 60, cx - 75, cy - 20);
-  ctx.fill();
-  // Legs
-  ctx.fillStyle = "#d4a050";
-  ctx.fillRect(cx - 45, cy + 25, 20, 36);
-  ctx.fillRect(cx - 10, cy + 25, 20, 36);
-  ctx.fillRect(cx + 30, cy + 25, 20, 36);
-  ctx.fillRect(cx + 55, cy + 25, 20, 36);
-  // Paws
-  ctx.fillStyle = "#a07030";
-  ctx.fillRect(cx - 48, cy + 55, 26, 10);
-  ctx.fillRect(cx - 13, cy + 55, 26, 10);
-  ctx.fillRect(cx + 27, cy + 55, 26, 10);
-  ctx.fillRect(cx + 52, cy + 55, 26, 10);
-  // Smile
-  ctx.strokeStyle = "#a07030";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(cx + 116, cy + 4, 8, 0, Math.PI * 0.5);
-  ctx.stroke();
+  if (isDuck) drawDuckPreview(cx, cy);
+  else        drawDogPreview(cx, cy);
 
   // Thẻ nhập tên
   const boxX = W/2 - 240, boxY = py + 330, boxW = 480, boxH = 60;
@@ -360,7 +322,7 @@ function drawDogNamePanel() {
   // Tên đang gõ + con trỏ nhấp nháy
   const display = dogNameInput + ((Math.floor(Date.now() / 400) % 2 === 0) ? "▌" : " ");
   ctx.font = "bold 34px sans-serif";
-  ctx.fillStyle = "#d4a050";
+  ctx.fillStyle = isDuck ? "#ffd24a" : "#d4a050";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(display, W/2, boxY + boxH/2);
@@ -370,7 +332,101 @@ function drawDogNamePanel() {
 
   // Hint
   drawText("Enter để xác nhận", W/2 - 100, py + ph - 55, 20, "#7afc6e", "#000", "center");
-  drawText("ESC để hủy", W/2 + 100, py + ph - 55, 20, "#ff6a6a", "#000", "center");
+  drawText("ESC để hủy",        W/2 + 100, py + ph - 55, 20, "#ff6a6a", "#000", "center");
+}
+
+// Vẽ minh hoạ Cún Golden Retriever đơn giản
+function drawDogPreview(cx, cy) {
+  ctx.fillStyle = "#d4a050";
+  ctx.beginPath(); ctx.ellipse(cx, cy, 80, 48, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#a07030";
+  ctx.beginPath(); ctx.ellipse(cx - 10, cy, 55, 30, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#d4a050";
+  ctx.beginPath(); ctx.ellipse(cx + 80, cy - 10, 38, 32, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#a07030";
+  ctx.beginPath(); ctx.ellipse(cx + 65, cy - 38, 14, 20, -0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx + 95, cy - 36, 14, 20, 0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#ffd6a8";
+  ctx.beginPath(); ctx.ellipse(cx + 112, cy - 2, 18, 14, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#1a1a1a";
+  ctx.beginPath(); ctx.ellipse(cx + 126, cy - 4, 7, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + 92, cy - 14, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.arc(cx + 93, cy - 15, 2, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#d4a050";
+  ctx.beginPath();
+  ctx.moveTo(cx - 75, cy - 20);
+  ctx.quadraticCurveTo(cx - 110, cy - 60, cx - 90, cy - 80);
+  ctx.quadraticCurveTo(cx - 70, cy - 60, cx - 75, cy - 20);
+  ctx.fill();
+  ctx.fillStyle = "#d4a050";
+  ctx.fillRect(cx - 45, cy + 25, 20, 36);
+  ctx.fillRect(cx - 10, cy + 25, 20, 36);
+  ctx.fillRect(cx + 30, cy + 25, 20, 36);
+  ctx.fillRect(cx + 55, cy + 25, 20, 36);
+  ctx.fillStyle = "#a07030";
+  ctx.fillRect(cx - 48, cy + 55, 26, 10);
+  ctx.fillRect(cx - 13, cy + 55, 26, 10);
+  ctx.fillRect(cx + 27, cy + 55, 26, 10);
+  ctx.fillRect(cx + 52, cy + 55, 26, 10);
+  ctx.strokeStyle = "#a07030";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx + 116, cy + 4, 8, 0, Math.PI * 0.5);
+  ctx.stroke();
+}
+
+// Vẽ minh hoạ Vịt Vàng đơn giản (thân tròn vàng + mỏ cam)
+function drawDuckPreview(cx, cy) {
+  // Thân
+  ctx.fillStyle = "#ffd24a";
+  ctx.beginPath(); ctx.ellipse(cx, cy + 10, 78, 56, 0, 0, Math.PI * 2); ctx.fill();
+  // Bụng nhạt
+  ctx.fillStyle = "#fff5a0";
+  ctx.beginPath(); ctx.ellipse(cx - 10, cy + 24, 50, 36, 0, 0, Math.PI * 2); ctx.fill();
+  // Đầu
+  ctx.fillStyle = "#ffd24a";
+  ctx.beginPath(); ctx.ellipse(cx + 60, cy - 32, 44, 38, 0, 0, Math.PI * 2); ctx.fill();
+  // Mỏ trên
+  ctx.fillStyle = "#ff8a3c";
+  ctx.beginPath();
+  ctx.moveTo(cx + 88, cy - 30);
+  ctx.lineTo(cx + 130, cy - 22);
+  ctx.lineTo(cx + 90, cy - 14);
+  ctx.closePath();
+  ctx.fill();
+  // Mỏ dưới
+  ctx.fillStyle = "#d96a1a";
+  ctx.beginPath();
+  ctx.moveTo(cx + 90, cy - 14);
+  ctx.lineTo(cx + 122, cy - 12);
+  ctx.lineTo(cx + 90, cy - 4);
+  ctx.closePath();
+  ctx.fill();
+  // Mắt
+  ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.arc(cx + 70, cy - 44, 9, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#1a1a1a";
+  ctx.beginPath(); ctx.arc(cx + 72, cy - 42, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath(); ctx.arc(cx + 74, cy - 44, 2, 0, Math.PI * 2); ctx.fill();
+  // Má hồng
+  ctx.fillStyle = "rgba(255, 120, 140, 0.55)";
+  ctx.beginPath(); ctx.arc(cx + 50, cy - 24, 8, 0, Math.PI * 2); ctx.fill();
+  // Cánh
+  ctx.fillStyle = "#e6b62a";
+  ctx.beginPath(); ctx.ellipse(cx - 18, cy + 8, 32, 22, -0.2, 0, Math.PI * 2); ctx.fill();
+  // Chân
+  ctx.fillStyle = "#ff8a3c";
+  ctx.fillRect(cx - 18, cy + 60, 14, 16);
+  ctx.fillRect(cx + 12, cy + 60, 14, 16);
+  // Bàn chân (chân vịt)
+  ctx.beginPath();
+  ctx.moveTo(cx - 28, cy + 76); ctx.lineTo(cx + 0, cy + 76); ctx.lineTo(cx - 12, cy + 84);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx + 2, cy + 76); ctx.lineTo(cx + 30, cy + 76); ctx.lineTo(cx + 18, cy + 84);
+  ctx.closePath(); ctx.fill();
 }
 
 // =============================================================================

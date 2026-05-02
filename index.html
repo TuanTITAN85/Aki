@@ -202,8 +202,7 @@ const POWER_ORDER = ["default", "dragon", "flame", "ice", "thunder", "wind"];
 // ===========================================================================
 const input = {
   left: false, right: false, up: false, down: false,
-  jump: false, mouseDown: false, mouseX: 0, mouseY: 0,
-  bs: false   // Backspace cho nhập tên Cún
+  jump: false, mouseDown: false, mouseX: 0, mouseY: 0
 };
 window.addEventListener("keydown", e => {
   // Khi đang nhập tên: chỉ bắt Enter/Escape ở đây, mọi phím chữ/số/IME để
@@ -214,12 +213,12 @@ window.addEventListener("keydown", e => {
     if (e.code === "Escape") { input.esc = true; return; }
     return;   // chặn không cho phím game chạy lúc đang gõ tên
   }
-  // Nhập tên chú Cún - bắt Enter/Escape/Backspace ở đây, ký tự để lại
+  // Nhập tên chú Cún/Vịt - dùng cùng <input> ẩn (hỗ trợ IME tiếng Việt)
+  // Code chỉ bắt Enter/Escape; ký tự + Backspace để <input> tự xử lý.
   if (typeof gameState !== "undefined" && gameState === STATE.DOG_NAME) {
     if (e.code === "Enter")  { input.enter = true; e.preventDefault(); return; }
     if (e.code === "Escape") { input.esc = true; return; }
-    if (e.code === "Backspace") { input.bs = true; e.preventDefault(); return; }
-    return;   // chặn các phím khác không ảnh hưởng game
+    return;   // chặn phím game khác (←, ↑, E...) không ảnh hưởng gameplay
   }
   // SHOP: ESC đóng cửa hàng ngay (← → chuyển tab)
   if (gameState === STATE.SHOP) {
@@ -270,7 +269,6 @@ window.addEventListener("keyup", e => {
   if (e.code === "Enter")      input.enter = false;
   if (e.code === "Escape")     input.esc = false;
   if (e.code === "KeyE")       input.shopKey = false;
-  if (e.code === "Backspace")   input.bs = false;
 });
 canvas.addEventListener("mousemove", e => {
   const rect = canvas.getBoundingClientRect();
@@ -286,17 +284,7 @@ canvas.addEventListener("mouseup", e => {
 // chặn menu chuột phải
 canvas.addEventListener("contextmenu", e => e.preventDefault());
 
-// Nhập ký tự cho tên Cún (keypress không bị chặn bởi keydown return)
-window.addEventListener("keypress", e => {
-  if (typeof gameState !== "undefined" && gameState === STATE.DOG_NAME) {
-    if (e.key === "Enter" || e.key === "Escape") return; // đã xử lý ở keydown
-    if (e.key === "Backspace") return;
-    if (e.key.length === 1 && dogNameInput.length < 14) {
-      dogNameInput += e.key;
-    }
-    e.preventDefault();
-  }
-});
+// (DOG_NAME giờ dùng nameInputEl giống NAME_INPUT - không cần keypress handler)
 
 // ===========================================================================
 // 16) GAME STATE -----------------------------------------------------------
@@ -658,7 +646,12 @@ function update() {
     updateParticles();
     if (noticeTimer > 0) noticeTimer--;
   } else if (gameState === STATE.DOG_NAME) {
-    // Xử lý nhập tên đồng hành (Cún hoặc Vịt tùy pendingCompanionKind)
+    // Đồng bộ giá trị từ <input> ẩn sang dogNameInput - IME tiếng Việt
+    // (Telex/VNI/Unikey) tự xử lý composition trên element này
+    dogNameInput = nameInputEl.value.slice(0, 14);
+    if (document.activeElement !== nameInputEl) {
+      nameInputEl.focus();
+    }
     if (input.enter) {
       input.enter = false;
       const isDuck = pendingCompanionKind === "duck";
@@ -672,6 +665,8 @@ function update() {
       }
       sfxCoin();
       pendingDogPrice = 0;
+      nameInputEl.blur();
+      nameInputEl.style.pointerEvents = "none";
       gameState = STATE.PLAYING;
     }
     if (input.esc) {
@@ -679,14 +674,10 @@ function update() {
       // Refund vàng đã trừ khi vào màn hình tên đồng hành
       player.gold += pendingDogPrice;
       pendingDogPrice = 0;
+      nameInputEl.blur();
+      nameInputEl.style.pointerEvents = "none";
       gameState = STATE.SHOP;
     }
-    if (input.bs) {
-      input.bs = false;
-      dogNameInput = dogNameInput.slice(0, -1);
-    }
-    // Nhập ký tự (chỉ ký tự đơn, không hỗ trợ IME ở đây)
-    // Xử lý ở phần keypress bên dưới
     dogNameCursor++;
     if (noticeTimer > 0) noticeTimer--;
   } else if (gameState === STATE.LOADING) {

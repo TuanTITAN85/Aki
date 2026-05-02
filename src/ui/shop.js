@@ -168,6 +168,12 @@ function buyShopItem(item) {
     dogNameInput = "";
     pendingDogPrice = actualPrice;        // refund khi escape
     pendingCompanionKind = item.companionKind || "dog";
+    // Reset + focus input ẩn để IME tiếng Việt hoạt động (giống NAME_INPUT)
+    if (typeof nameInputEl !== "undefined") {
+      nameInputEl.value = "";
+      nameInputEl.style.pointerEvents = "auto";
+      Promise.resolve().then(() => nameInputEl.focus());
+    }
     sfxCoin();                            // tiếng confirm trước khi đổi state
     return;                               // quay ra ngay (đổi state -> shop đóng)
   }

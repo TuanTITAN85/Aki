@@ -164,8 +164,9 @@ class Enemy {
     const dy = (player.y + player.h/2) - (this.y + this.h/2);
     const dist = Math.hypot(dx, dy);
 
-    // Tìm thấy người chơi -> đuổi (chặn nếu đang countdown)
-    if (!inCountdown && dist < (this.boss ? 800 : 460)) this.aggro = true;
+    // Tìm thấy người chơi -> đuổi (chặn nếu đang countdown).
+    // Range giảm 30%: enemy 460->322, boss 800->560
+    if (!inCountdown && dist < (this.boss ? 560 : 322)) this.aggro = true;
 
     let speed = this.boss ? 3.4 : (this.kind === "beast" ? 3.6 : 2.6);
 
@@ -175,10 +176,14 @@ class Enemy {
       // Nhảy nếu thấy người chơi cao hơn (boss/quái nhảy thường xuyên hơn)
       const jumpChance = this.boss ? 0.08 : 0.07;
       if (this.onGround && dy < -20 && Math.random() < jumpChance) this.vy = -12;
-      // Boss dùng kỹ năng riêng theo loại
+      // Boss dùng kỹ năng riêng theo loại (skill range giảm 30%: 700 -> 490)
+      // Boss cũng không bắn nếu offscreen
       if (this.boss) {
         this.shootCD--;
-        if (this.shootCD <= 0 && dist < 700) {
+        const bossOnScreen = (typeof camera !== "undefined")
+                           ? isOnScreen(this, camera.x, camera.y, 60)
+                           : true;
+        if (this.shootCD <= 0 && dist < 490 && bossOnScreen) {
           const bk = BOSS_KINDS[this.bossKind];
           if (bk && bk.skill) {
             bk.skill(this, player);
@@ -228,8 +233,14 @@ class Enemy {
     this.y += this.vy;
     this._collide(level, "y");
 
-    // Đánh người chơi nếu chạm (chặn nếu đang countdown)
-    if (!inCountdown && rectsHit(this, player) && this.attackCD <= 0) {
+    // Offscreen check: enemy không gây damage nếu đã ra khỏi screen
+    // (player không thể "ăn dame oan" khi không thấy quái)
+    const onScreen = (typeof camera !== "undefined")
+                   ? isOnScreen(this, camera.x, camera.y, 40)
+                   : true;
+
+    // Đánh người chơi nếu chạm (chặn nếu đang countdown / offscreen)
+    if (!inCountdown && onScreen && rectsHit(this, player) && this.attackCD <= 0) {
       player.takeDamage(this.dmg);
       this.attackCD = 40;
       player.vx = Math.sign(dx || 1) * 6;
@@ -237,7 +248,7 @@ class Enemy {
     }
 
     // Đánh đồng hành (Cún + Vịt) nếu chạm - dame nhẹ hơn so với đánh player
-    if (!inCountdown && this.attackCD <= 0) {
+    if (!inCountdown && onScreen && this.attackCD <= 0) {
       if (typeof companionDog !== "undefined" && companionDog && companionDog.alive
           && rectsHit(this, companionDog)) {
         companionDog.takeDamage(Math.floor(this.dmg * 0.5));

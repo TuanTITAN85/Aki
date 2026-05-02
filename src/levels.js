@@ -107,10 +107,12 @@ const ISLAND_CONFIGS = [
 // =============================================================================
 function buildIsland(index) {
   const cfg = ISLAND_CONFIGS[index];
+  // Đảo dài hơn theo index: đảo 1 = 4200, đảo 5 = 5800
+  const islandWidth = 4200 + index * 400;
   const level = {
     name: cfg.name,
     config: cfg,
-    width: 4200,
+    width: islandWidth,
     groundY: 560,
     deathY: 900,
     spawnX: 100,
@@ -124,10 +126,11 @@ function buildIsland(index) {
   };
 
   // Nền chính - 4 đoạn cách nhau (rớt xuống biển ở giữa)
-  level.platforms.push({ x: 0, y: 560, w: 1200, h: 200, type: "ground" });
-  level.platforms.push({ x: 1280, y: 560, w: 900, h: 200, type: "ground" });
-  level.platforms.push({ x: 2260, y: 560, w: 800, h: 200, type: "ground" });
-  level.platforms.push({ x: 3140, y: 560, w: 1060, h: 200, type: "ground" });
+  // Đoạn cuối kéo dài thêm để cho phép boss + thuyền nằm trong width mới
+  level.platforms.push({ x: 0,    y: 560, w: 1200, h: 200, type: "ground" });
+  level.platforms.push({ x: 1280, y: 560, w: 900,  h: 200, type: "ground" });
+  level.platforms.push({ x: 2260, y: 560, w: 800,  h: 200, type: "ground" });
+  level.platforms.push({ x: 3140, y: 560, w: islandWidth - 3140, h: 200, type: "ground" });
 
   // Các bục lơ lửng - leo cao tìm vàng
   const floats = [
@@ -180,27 +183,35 @@ function buildIsland(index) {
   // NPC giao nhiệm vụ ngay đầu đảo
   level.npcs.push(new QuestNPC(180, 512, index));
 
-  // Sinh 5 lính canh rải đều khắp đảo
-  const guardSpots = [600, 1300, 2050, 2700, 3500];
+  // Multiplier khó hơn theo cấp đảo (đảo 1 = 1.0, đảo 5 ≈ 1.75)
+  const diffMul = Math.pow(1.15, index);
+
+  // Sinh lính canh rải đều - đảo cuối (idx 4) có 9 lính
+  // Đảo 1: 5 spots, đảo 5: 9 spots (thêm dần dọc đảo dài hơn)
+  const baseGuards  = [600, 1300, 2050, 2700, 3500];
+  const extraGuards = [4000, 4400, 4800, 5200];
+  const guardSpots  = baseGuards.concat(extraGuards.slice(0, index));
   for (const gx of guardSpots) {
     const e = new Enemy(gx, 500, {
       kind: "guard",
-      hp: 70 + index * 30,        // dày máu hơn nhiều
-      dmg: 14 + index * 5,        // gây sát thương cao hơn
+      hp:  Math.round((70 + index * 30) * diffMul),
+      dmg: Math.round((14 + index * 5)  * diffMul),
       scoreReward: 60 + index * 20,
       goldReward: 6 + index * 2
     });
     level.enemies.push(e);
   }
 
-  // Sinh 5 thú rừng - nhanh và hung dữ
-  const beastSpots = [400, 980, 1600, 2300, 3300];
+  // Sinh thú rừng - tương tự guard, đảo cuối có 9 con
+  const baseBeasts  = [400, 980, 1600, 2300, 3300];
+  const extraBeasts = [3900, 4300, 4700, 5100];
+  const beastSpots  = baseBeasts.concat(extraBeasts.slice(0, index));
   for (let i = 0; i < beastSpots.length; i++) {
     const e = new Enemy(beastSpots[i], 500, {
       kind: "beast",
       theme: cfg.beastThemes[i % cfg.beastThemes.length],
-      hp: 55 + index * 25,
-      dmg: 12 + index * 4,
+      hp:  Math.round((55 + index * 25) * diffMul),
+      dmg: Math.round((12 + index * 4)  * diffMul),
       w: 42, h: 42,
       scoreReward: 50 + index * 15,
       goldReward: 5 + index * 2
@@ -208,16 +219,17 @@ function buildIsland(index) {
     level.enemies.push(e);
   }
 
-  // Sinh boss ở cuối đảo - mỗi đảo 1 boss khác nhau (xem BOSS_KINDS)
+  // Sinh boss ở cuối đảo - đặt ở vị trí cuối width mới
   const bk = BOSS_KINDS[cfg.bossKind] || {};
   const bossW = bk.w || 80, bossH = bk.h || 100;
-  const boss = new Enemy(3850, 560 - bossH, {
+  const bossX = islandWidth - 350;
+  const boss = new Enemy(bossX, 560 - bossH, {
     kind: "boss",
     boss: true,
     bossKind: cfg.bossKind,
     bossName: cfg.bossName,
-    hp:  Math.round((450 + index * 200) * (bk.hpMul  || 1)),
-    dmg: Math.round((24  + index * 7)   * (bk.dmgMul || 1)),
+    hp:  Math.round((450 + index * 200) * (bk.hpMul  || 1) * diffMul),
+    dmg: Math.round((24  + index * 7)   * (bk.dmgMul || 1) * diffMul),
     w: bossW, h: bossH,
     scoreReward: 500 + index * 200,
     goldReward: 50 + index * 25,
@@ -249,7 +261,8 @@ function buildIsland(index) {
   if (index >= 2) level.items.push(new Item(3500, 320, "fruit"));
 
   // Thuyền ở cuối đảo (xuất hiện sau khi giết boss)
-  level.boats.push(new Boat(4050, 540));
+  // Thuyền ở cuối đảo - đặt theo width mới
+  level.boats.push(new Boat(islandWidth - 150, 540));
 
   // Cây/đá trang trí
   for (let i = 0; i < 25; i++) {

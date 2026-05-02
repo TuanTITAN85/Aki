@@ -26,6 +26,17 @@ function rectsHit(a, b) {
          a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
+// Kiểm tra entity có nằm trong screen không (theo camera). Dùng để chặn
+// enemy đánh / boss bắn khi đã ra khỏi tầm nhìn của player. Margin nhỏ
+// để vẫn được active khi gần mép.
+function isOnScreen(entity, camX, camY, margin) {
+  if (margin == null) margin = 40;
+  const px = entity.x - camX;
+  const py = entity.y - camY;
+  return px + entity.w > -margin && px < W + margin &&
+         py + entity.h > -margin && py < H + margin;
+}
+
 // Vẽ chữ có viền (cho dễ đọc trên nền)
 function drawText(text, x, y, size = 18, color = "#fff", outline = "#000", align = "left") {
   ctx.font = `bold ${size}px "Segoe UI", sans-serif`;

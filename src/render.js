@@ -515,8 +515,9 @@ const BOSS_SHEETS = {
 const ISLAND_BACKGROUNDS = {
   grass:   { src: "assets/bg_grass.png",   image: null, ready: false },
   desert:  { src: "assets/bg_desert.png",  image: null, ready: false },
+  snow:    { src: "assets/bg_snow.png",    image: null, ready: false },
   volcano: { src: "assets/bg_volcano.png", image: null, ready: false }
-  // TODO: snow (khi có asset)
+  // Cloud island (đảo 5) vẫn dùng gradient cũ - dramatic cho boss cuối
 };
 
 function loadIslandBackgrounds() {

@@ -241,20 +241,35 @@ class CompanionDog {
     const sx = this.x - camX;
     const sy = this.y - camY;
 
-    // Chọn sprite frame theo state
-    const t = this.animTime;
-    let grid;
-    if (this.state === "attack") {
-      grid = (this.attackTimer > 9) ? DOG_ATTACK_1 : DOG_ATTACK_2;
-    } else if (this.state === "walk") {
-      grid = (Math.floor(t / 8) % 2 === 0) ? DOG_WALK_1 : DOG_WALK_2;
-    } else {
-      grid = (Math.floor(t / 18) % 2 === 0) ? DOG_IDLE_1 : DOG_IDLE_2;
+    // Ưu tiên sprite sheet PNG nếu đã tải xong
+    let drawn = false;
+    if (typeof DOG_SHEET !== "undefined" && DOG_SHEET.ready) {
+      const dispH = this.h * 2.5;       // 30 * 2.5 = 75 - lớn hơn collision cho rõ chi tiết
+      const dispW = dispH * (DOG_SHEET.frameW / DOG_SHEET.frameH);
+      const dx = sx + this.w/2 - dispW/2;     // căn giữa X
+      const dy = sy + this.h - dispH;          // căn đáy Y với collision
+      // Map state -> sprite row: walk + đang đuổi enemy => "run"
+      let animState = this.state;
+      if (this.state === "walk" && this.targetEnemy) animState = "run";
+      drawn = drawDogSpriteFrame(animState, this.animTime,
+                                 dx, dy, dispW, dispH, this.facing < 0);
     }
 
-    drawPixelSprite(grid, DOG_PALETTE, sx, sy, 3, this.facing < 0);
+    if (!drawn) {
+      // Fallback pixel matrix cũ nếu sprite chưa tải
+      const t = this.animTime;
+      let grid;
+      if (this.state === "attack") {
+        grid = (this.attackTimer > 9) ? DOG_ATTACK_1 : DOG_ATTACK_2;
+      } else if (this.state === "walk") {
+        grid = (Math.floor(t / 8) % 2 === 0) ? DOG_WALK_1 : DOG_WALK_2;
+      } else {
+        grid = (Math.floor(t / 18) % 2 === 0) ? DOG_IDLE_1 : DOG_IDLE_2;
+      }
+      drawPixelSprite(grid, DOG_PALETTE, sx, sy, 3, this.facing < 0);
+    }
 
-    // Vẽ tên phía trên đầu Cún
+    // Vẽ tên phía trên đầu Cún (luôn ở vị trí cũ, đỡ rối khi sprite to/nhỏ)
     drawText(this.name, sx + this.w/2, sy - 10, 12, "#ffd700", "#000", "center");
   }
 }

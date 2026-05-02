@@ -445,6 +445,67 @@ function drawFruitImage(fruit, dx, dy, dw, dh) {
 }
 
 // =============================================================================
+// SPRITE SHEET CỦA CHÚ CÚN ĐỒNG HÀNH - 4x4 grid (idle/walk/run/attack)
+// =============================================================================
+const DOG_SHEET = {
+  src: "assets/companion_dog.png",
+  cols: 4, rows: 4,
+  states: {
+    idle:   { row: 0, frames: 4, rate: 14 },   // đứng panting
+    walk:   { row: 1, frames: 4, rate: 8  },   // đi theo player
+    run:    { row: 2, frames: 4, rate: 5  },   // đuổi enemy
+    attack: { row: 3, frames: 4, rate: 5  }    // pounce/cắn
+  },
+  image: null, ready: false, frameW: 0, frameH: 0
+};
+
+function loadDogSheet() {
+  AssetLoader.expect();
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = img.width;
+    c.height = img.height;
+    const cx = c.getContext("2d");
+    cx.drawImage(img, 0, 0);
+    chromaKey(c);                  // loại bg magenta
+    DOG_SHEET.image  = c;
+    DOG_SHEET.frameW = img.width  / DOG_SHEET.cols;
+    DOG_SHEET.frameH = img.height / DOG_SHEET.rows;
+    DOG_SHEET.ready  = true;
+    AssetLoader.done(true);
+  };
+  img.onerror = () => {
+    console.warn("Không tải được:", DOG_SHEET.src,
+                 "- Cún sẽ dùng pixel matrix cũ");
+    AssetLoader.done(false);
+  };
+  img.src = DOG_SHEET.src;
+}
+loadDogSheet();
+
+function drawDogSpriteFrame(state, animTime, dx, dy, dw, dh, flip) {
+  if (!DOG_SHEET.ready) return false;
+  const cfg = DOG_SHEET.states[state];
+  if (!cfg) return false;
+  const idx = Math.floor(animTime / cfg.rate) % cfg.frames;
+  const sx = idx     * DOG_SHEET.frameW;
+  const sy = cfg.row * DOG_SHEET.frameH;
+  if (flip) {
+    ctx.save();
+    ctx.translate(dx + dw, dy);
+    ctx.scale(-1, 1);
+    ctx.drawImage(DOG_SHEET.image, sx, sy, DOG_SHEET.frameW, DOG_SHEET.frameH,
+                  0, 0, dw, dh);
+    ctx.restore();
+  } else {
+    ctx.drawImage(DOG_SHEET.image, sx, sy, DOG_SHEET.frameW, DOG_SHEET.frameH,
+                  dx, dy, dw, dh);
+  }
+  return true;
+}
+
+// =============================================================================
 // SPRITE SHEET BOSS - mỗi boss 1 file PNG, 4x4 grid (idle/walk/charge/attack)
 // Cấu trúc dictionary để dễ thêm boss mới (chỉ cần thêm 1 entry).
 // =============================================================================

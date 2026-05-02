@@ -335,6 +335,12 @@ function drawFireTiger(b, camX, camY) {
 
 // ----- Hàm vẽ Vua Hải Tặc Đen (Đảo 5) -----
 function drawDarkKing(b, camX, camY) {
+  // Ưu tiên sprite PNG nếu đã tải xong
+  if (drawBossSpriteFrame("dark_king", pickBossAnimState(b),
+                          b.animTime, b, camX, camY)) {
+    return;
+  }
+  // Fallback: vẽ shapes thủ công (code cũ)
   const x = b.x - camX, y = b.y - camY;
   const w = b.w, h = b.h;
   const t = b.animTime;

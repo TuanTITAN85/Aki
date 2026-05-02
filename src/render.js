@@ -507,6 +507,46 @@ const BOSS_SHEETS = {
   // Hoàn tất 5 boss!
 };
 
+// =============================================================================
+// BACKGROUND ĐẢO - 1 ảnh 16:9 cho mỗi chủ đề đảo, dùng làm parallax bg
+// Tự thêm entry khi có thêm asset (snow, volcano, ...).
+// Mapping decoration -> bg key: tree=grass, cactus=desert, pine=snow, rock=volcano
+// =============================================================================
+const ISLAND_BACKGROUNDS = {
+  grass:  { src: "assets/bg_grass.png",  image: null, ready: false },
+  desert: { src: "assets/bg_desert.png", image: null, ready: false }
+  // TODO: snow, volcano (khi có asset)
+};
+
+function loadIslandBackgrounds() {
+  for (const key of Object.keys(ISLAND_BACKGROUNDS)) {
+    const cfg = ISLAND_BACKGROUNDS[key];
+    AssetLoader.expect();
+    const img = new Image();
+    img.onload = () => {
+      cfg.image = img;
+      cfg.ready = true;
+      AssetLoader.done(true);
+    };
+    img.onerror = () => {
+      console.warn("Không tải được background:", cfg.src,
+                   "- đảo này dùng gradient + parallax thủ công");
+      AssetLoader.done(false);
+    };
+    img.src = cfg.src;
+  }
+}
+loadIslandBackgrounds();
+
+// Mapping từ field decoration trong ISLAND_CONFIGS -> bg key
+const ISLAND_BG_MAP = {
+  tree:   "grass",
+  cactus: "desert",
+  pine:   "snow",
+  rock:   "volcano"
+  // cloud: chưa có asset, dùng fallback gradient
+};
+
 function loadBossSheets() {
   for (const key of Object.keys(BOSS_SHEETS)) {
     const sheet = BOSS_SHEETS[key];

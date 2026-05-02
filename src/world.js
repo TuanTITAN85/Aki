@@ -15,20 +15,38 @@
 
 function drawBackground(level, camX) {
   const cfg = level.config;
-  // bầu trời gradient
+
+  // Ưu tiên ảnh nền PNG nếu có asset cho đảo này (mapping qua decoration)
+  const bgKey = ISLAND_BG_MAP && ISLAND_BG_MAP[cfg.decoration];
+  const bg    = bgKey && ISLAND_BACKGROUNDS[bgKey];
+  if (bg && bg.ready) {
+    // Vẽ ảnh full canvas với parallax 0.3 (di chuyển 30% so với camera)
+    // Lặp 2 lần liên tiếp để khi camera di chuyển không bị "trống" ở mép
+    let offsetX = -((camX * 0.3) % W);
+    if (offsetX > 0) offsetX -= W;
+    ctx.drawImage(bg.image, offsetX,     0, W, H);
+    ctx.drawImage(bg.image, offsetX + W, 0, W, H);
+    // Vẫn vẽ sóng động phía dưới để cảm giác biển sống động
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    for (let i = 0; i < 30; i++) {
+      const wx = ((i * 60 - camX * 0.6) % (W + 60) + (W + 60)) % (W + 60);
+      ctx.fillRect(wx, 670 + (i % 3) * 8, 30, 3);
+    }
+    return;
+  }
+
+  // Fallback: gradient + sun + clouds + mountains thủ công
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, cfg.skyTop);
   g.addColorStop(1, cfg.skyBot);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  // mặt trời / mặt trăng
   ctx.fillStyle = "rgba(255,255,255,0.6)";
   ctx.beginPath(); ctx.arc(W - 160, 120, 60, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#fff5a0";
   ctx.beginPath(); ctx.arc(W - 160, 120, 44, 0, Math.PI * 2); ctx.fill();
 
-  // mây trôi (parallax)
   ctx.fillStyle = "rgba(255,255,255,0.85)";
   for (let i = 0; i < 8; i++) {
     const cx = ((i * 320 - camX * 0.2) % (W + 200) + (W + 200)) % (W + 200) - 100;
@@ -40,7 +58,6 @@ function drawBackground(level, camX) {
     ctx.fill();
   }
 
-  // núi xa (parallax)
   ctx.fillStyle = cfg.groundBot;
   ctx.globalAlpha = 0.5;
   for (let i = 0; i < 10; i++) {
@@ -54,10 +71,8 @@ function drawBackground(level, camX) {
   }
   ctx.globalAlpha = 1;
 
-  // biển ở dưới cùng
   ctx.fillStyle = cfg.waterColor;
   ctx.fillRect(0, 660, W, H - 660);
-  // sóng
   ctx.fillStyle = "rgba(255,255,255,0.4)";
   for (let i = 0; i < 30; i++) {
     const wx = ((i * 60 - camX * 0.6) % (W + 60) + (W + 60)) % (W + 60);

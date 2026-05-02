@@ -109,38 +109,33 @@ function drawHUD() {
   ctx.fillRect(20, 20, 3, 30);
   drawText(player.name, 32, 28, 17, "#dbe6f5", "#000");
 
-  // === PANEL CHÍNH (trái) - đảo, HP, mạng, điểm, vàng, sức mạnh, kiếm ===
-  const panelX = 20, panelY = 60, panelW = 340, panelH = 350;
+  // === PANEL CHÍNH (trái) - HP, mạng, điểm, vàng, sức mạnh, kiếm, companion HP ===
+  // Chiều cao động: base 175 + 22px mỗi companion (cún + vịt)
+  const panelX = 20, panelY = 60, panelW = 340;
+  let panelH = 175;
+  if (typeof companionDog  !== "undefined" && companionDog)  panelH += 22;
+  if (typeof companionDuck !== "undefined" && companionDuck) panelH += 22;
   ctx.fillStyle = "rgba(14, 22, 48, 0.82)";
   ctx.fillRect(panelX, panelY, panelW, panelH);
   ctx.fillStyle = "#ffd24a";
   ctx.fillRect(panelX, panelY, panelW, 3);
 
-  // Tên đảo - co chữ lại nếu quá dài
-  let nameSize = 20;
-  ctx.font = `bold ${nameSize}px sans-serif`;
-  while (ctx.measureText(level.name).width > panelW - 24 && nameSize > 14) {
-    nameSize--;
-    ctx.font = `bold ${nameSize}px sans-serif`;
-  }
-  drawText(level.name, panelX + panelW/2, panelY + 12, nameSize, "#ffe18a", "#000", "center");
-
   // Máu - thanh không viền
   const hpRatio = clamp(player.hp / player.maxHp, 0, 1);
-  drawText("Máu", panelX + 14, panelY + 46, 14, "#a8b6cc");
+  drawText("Máu", panelX + 14, panelY + 16, 14, "#a8b6cc");
   const barX = panelX + 60, barW = panelW - 76, barH = 16;
   ctx.fillStyle = "rgba(255, 90, 90, 0.18)";
-  ctx.fillRect(barX, panelY + 46, barW, barH);
+  ctx.fillRect(barX, panelY + 16, barW, barH);
   ctx.fillStyle = "#ff5a5a";
-  ctx.fillRect(barX, panelY + 46, barW * hpRatio, barH);
+  ctx.fillRect(barX, panelY + 16, barW * hpRatio, barH);
   drawText(`${Math.max(0, Math.floor(player.hp))}/${player.maxHp}`,
-           barX + barW/2, panelY + 47, 13, "#fff", "#000", "center");
+           barX + barW/2, panelY + 17, 13, "#fff", "#000", "center");
 
-  // Mạng (trái tim) - không có ô viền cho trái tim mất, dùng heart mờ thay
-  drawText("Mạng", panelX + 14, panelY + 76, 14, "#a8b6cc");
+  // Mạng (trái tim)
+  drawText("Mạng", panelX + 14, panelY + 46, 14, "#a8b6cc");
   const livesShown = Math.max(3, player.lives);
   for (let i = 0; i < livesShown; i++) {
-    const hx = panelX + 66 + i * 28, hy = panelY + 80;
+    const hx = panelX + 66 + i * 28, hy = panelY + 50;
     const filled = i < player.lives;
     ctx.fillStyle = filled ? "#ff5a76" : "rgba(255, 90, 118, 0.15)";
     ctx.beginPath();
@@ -153,36 +148,35 @@ function drawHUD() {
   }
 
   // Điểm + Vàng
-  drawText("Điểm: " + player.score, panelX + 14, panelY + 110, 17, "#ffd24a", "#000");
-  drawText("Vàng: " + player.gold,  panelX + 14, panelY + 132, 17, "#fff5a0", "#000");
+  drawText("Điểm: " + player.score, panelX + 14, panelY + 80,  17, "#ffd24a", "#000");
+  drawText("Vàng: " + player.gold,  panelX + 14, panelY + 102, 17, "#fff5a0", "#000");
 
   // Sức mạnh hiện tại - icon PNG cho 5 trái, circle cho default
   const pcfg = POWERS[player.power] || POWERS.default;
-  drawText("Sức mạnh:", panelX + 14, panelY + 156, 15, "#aef", "#000");
-  const icx = panelX + 110, icy = panelY + 165;
+  drawText("Sức mạnh:", panelX + 14, panelY + 126, 15, "#aef", "#000");
+  const icx = panelX + 110, icy = panelY + 135;
   let drawnIcon = false;
   if (player.power !== "default") {
     drawnIcon = drawFruitImage(player.power, icx - 11, icy - 11, 22, 22);
   }
   if (!drawnIcon) {
-    // Fallback: circle theo màu power
     ctx.fillStyle = pcfg.glow;
     ctx.beginPath(); ctx.arc(icx, icy, 9, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = pcfg.color;
     ctx.beginPath(); ctx.arc(icx, icy, 6, 0, Math.PI * 2); ctx.fill();
   }
-  drawText(pcfg.name, panelX + 124, panelY + 156, 15, pcfg.color, "#000");
+  drawText(pcfg.name, panelX + 124, panelY + 126, 15, pcfg.color, "#000");
 
   // Kiếm hiện tại
   const swordNames = ["(chưa có)", "Kiếm Đồng", "Kiếm Bạc", "Kiếm Vàng"];
   const swordCols  = ["#888",       "#cc7a1a",   "#dde0e6",  "#ffd24a"];
-  drawText("Kiếm:", panelX + 14, panelY + 182, 15, "#aef", "#000");
+  drawText("Kiếm:", panelX + 14, panelY + 152, 15, "#aef", "#000");
   drawText(swordNames[player.swordTier] +
            (player.swordTier > 0 ? `  (×${player.swordMultiplier()})` : ""),
-           panelX + 64, panelY + 182, 15, swordCols[player.swordTier], "#000");
+           panelX + 64, panelY + 152, 15, swordCols[player.swordTier], "#000");
 
   // === HP đồng hành (Cún + Vịt) - hiển thị nếu có ===
-  let compY = panelY + 210;
+  let compY = panelY + 180;
   function drawCompanionRow(c, label, color) {
     if (!c) return;
     drawText(label + ":", panelX + 14, compY, 13, "#aef", "#000");
@@ -211,15 +205,24 @@ function drawHUD() {
   if (companionDog)  drawCompanionRow(companionDog,  "Cún", "#e8b258");
   if (companionDuck) drawCompanionRow(companionDuck, "Vịt", "#ffd24a");
 
-  // === PANEL NHIỆM VỤ (phải) - tách riêng, kích thước nhỏ hơn ===
+  // === PANEL NHIỆM VỤ (phải) - có TÊN ĐẢO header + danh sách nhiệm vụ ===
   const qpX = W - 300, qpY = 20, qpW = 280;
-  const qpH = 40 + Math.max(1, quests.length) * 22 + 8;   // tự co theo số quest
+  const qpH = 70 + Math.max(1, quests.length) * 22 + 8;   // header (đảo + nhiệm vụ) + quests
   ctx.fillStyle = "rgba(14, 22, 48, 0.82)";
   ctx.fillRect(qpX, qpY, qpW, qpH);
   ctx.fillStyle = "#ffd24a";
   ctx.fillRect(qpX, qpY, qpW, 3);
-  drawText("NHIỆM VỤ", qpX + qpW/2, qpY + 12, 16, "#ffe18a", "#000", "center");
-  let qy = qpY + 38;
+  // Tên đảo - co chữ nếu quá dài
+  let nameSize = 18;
+  ctx.font = `bold ${nameSize}px sans-serif`;
+  while (ctx.measureText(level.name).width > qpW - 20 && nameSize > 14) {
+    nameSize--;
+    ctx.font = `bold ${nameSize}px sans-serif`;
+  }
+  drawText(level.name, qpX + qpW/2, qpY + 12, nameSize, "#ffe18a", "#000", "center");
+  // Sub-header "Nhiệm vụ:"
+  drawText("Nhiệm vụ:", qpX + 14, qpY + 42, 14, "#aef", "#000");
+  let qy = qpY + 64;
   for (const q of quests) {
     const sym = q.done ? "✓" : "•";
     const col = q.done ? "#7afc6e" : "#fff";

@@ -89,6 +89,19 @@ function sfxFail() {
   setTimeout(() => playTone(82, 0.4, { type: "triangle", vol: 0.12 }), 1100);
 }
 
+// Tiếng nổ boss khi chết - deep + bright explosion
+function sfxBossDeath() {
+  // Pha 1: explosion trầm
+  playTone(80, 0.4, { type: "sawtooth", endFreq: 30, vol: 0.22 });
+  // Pha 2: chùm tone descending trumpet-ish
+  setTimeout(() => playTone(440, 0.3, { type: "square", endFreq: 220, vol: 0.16 }), 100);
+  setTimeout(() => playTone(330, 0.4, { type: "square", endFreq: 110, vol: 0.14 }), 250);
+  // Pha 3: tiếng vàng rơi xuống (coin chime cao)
+  setTimeout(() => playTone(880,  0.15, { type: "sine", vol: 0.12 }), 500);
+  setTimeout(() => playTone(1320, 0.18, { type: "sine", vol: 0.12 }), 600);
+  setTimeout(() => playTone(1760, 0.20, { type: "sine", vol: 0.10 }), 720);
+}
+
 // Nhạc nền: melody pirate kiểu La thứ, lặp vô tận khi đang chơi
 const BGM_NOTES = [
   // Câu nhạc 1

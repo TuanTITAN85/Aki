@@ -136,6 +136,13 @@ class Enemy {
     this.bossKind = opts.bossKind || null;     // mỗi đảo 1 loại boss khác nhau
     this.shootCD = 0;
     this.rewarded = false;            // đã được tính điểm/quest chưa
+    // Boss 2 phase (chỉ áp dụng nếu opts.phaseTwo = true)
+    this.hasTwoPhases = !!opts.phaseTwo;
+    this.bossPhase = 1;               // 1 = phase đầu, 2 = phase rage
+    this.bossPhase2Hp = Math.round((opts.hp || 100) * 0.6);  // HP phase 2 = 60%
+    this.dmgPhase1 = opts.dmg || 10;
+    this.dmgPhase2 = Math.round((opts.dmg || 10) * 1.5);     // dame phase 2 = +50%
+    this.phaseRageTimer = 0;          // 60 frame hiện hào quang giận khi chuyển phase
   }
 
   // Kiểm tra có nền bên dưới điểm (x, y) không (dùng để khỏi đi rơi mép)
@@ -244,6 +251,7 @@ class Enemy {
     }
     if (this.attackCD > 0) this.attackCD--;
     if (this.hitFlash > 0) this.hitFlash--;
+    if (this.phaseRageTimer > 0) this.phaseRageTimer--;   // animation hào quang giận
     this.animTime++;
 
     // Rơi xuống biển = chết luôn (để nhiệm vụ vẫn hoàn thành được)
@@ -284,6 +292,23 @@ class Enemy {
       count: 14, color: "#ffea60", speed: 4, size: 3, life: 28
     });
     if (this.hp <= 0) {
+      // Boss với 2 phase: chuyển sang phase 2 thay vì chết
+      if (this.boss && this.hasTwoPhases && this.bossPhase === 1) {
+        this.bossPhase = 2;
+        this.hp = this.bossPhase2Hp;
+        this.maxHp = this.bossPhase2Hp;       // reset maxHp -> bar đầy lại
+        this.dmg = this.dmgPhase2;
+        this.phaseRageTimer = 60;             // 1s rage animation
+        // Hiệu ứng "tỏa giận" - particles tím + đỏ
+        spawnParticles(this.x + this.w/2, this.y + this.h/2, {
+          count: 40, color: "#a26bff", speed: 6, size: 4, life: 50
+        });
+        spawnParticles(this.x + this.w/2, this.y + this.h/2, {
+          count: 30, color: "#ff5a5a", speed: 5, size: 4, life: 45
+        });
+        if (typeof sfxBossShoot === "function") sfxBossShoot();
+        return;            // không chết, không spawn death particle
+      }
       this.alive = false;
       spawnParticles(this.x + this.w/2, this.y + this.h/2, {
         count: 28, color: "#ff7a3c", speed: 6, size: 4, life: 40
@@ -332,11 +357,29 @@ class Enemy {
       const px = (this.theme === "yeti" || this.boss) ? 4 : 3;
       drawPixelSprite(grid, pal, this.x - camX, this.y - camY, px, flip);
     } else if (this.kind === "boss") {
+      // Boss phase 2: vẽ aura giận (đỏ-tím nở thở) phía sau sprite
+      if (this.bossPhase === 2) {
+        const cx = this.x - camX + this.w/2;
+        const cy = this.y - camY + this.h/2;
+        const pulse = 0.4 + 0.2 * Math.sin(this.animTime * 0.15);
+        // Burst hào quang khi mới chuyển phase
+        const rage = this.phaseRageTimer > 0
+                   ? 1 + (this.phaseRageTimer / 60) * 1.2
+                   : 1;
+        const r1 = (Math.max(this.w, this.h) * 0.9) * rage;
+        const r2 = r1 * 1.4;
+        ctx.globalAlpha = 0.35 * pulse;
+        ctx.fillStyle = "#ff3838";
+        ctx.beginPath(); ctx.arc(cx, cy, r2, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.5 * pulse;
+        ctx.fillStyle = "#a26bff";
+        ctx.beginPath(); ctx.arc(cx, cy, r1, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
       const bk = BOSS_KINDS[this.bossKind];
       if (bk && bk.draw) {
         bk.draw(this, camX, camY);
       } else {
-        // dự phòng (không nên xảy ra nếu cấu hình đúng)
         const grid = (Math.floor(this.animTime / 8) % 2 === 0) ? GUARD_BODY_1 : GUARD_BODY_2;
         const pal = { ...GUARD_PALETTE, R: "#7a1a1a", K: "#0a0a0a", Y: "#ffd24a" };
         drawPixelSprite(grid, pal, this.x - camX, this.y - camY, 5, this.facing === -1);

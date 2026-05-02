@@ -499,10 +499,49 @@ function update() {
         e.rewarded = true;
         player.score += e.scoreReward;
         player.gold  += e.goldReward;
-        sfxKillEnemy();
         if (e.kind === "guard")      updateQuests(quests, "kill_guard");
         else if (e.kind === "beast") updateQuests(quests, "kill_beast");
-        else if (e.kind === "boss")  updateQuests(quests, "kill_boss");
+        else if (e.kind === "boss") {
+          updateQuests(quests, "kill_boss");
+          // === BOSS DEATH FX ===
+          // Explosion particles - cam đỏ + vàng
+          spawnParticles(e.x + e.w/2, e.y + e.h/2, {
+            count: 60, color: "#ff7a3c", speed: 9, size: 5, life: 60
+          });
+          spawnParticles(e.x + e.w/2, e.y + e.h/2, {
+            count: 30, color: "#ffd24a", speed: 7, size: 5, life: 70
+          });
+          spawnParticles(e.x + e.w/2, e.y + e.h/2, {
+            count: 20, color: "#ff3838", speed: 11, size: 4, life: 55
+          });
+          sfxBossDeath();
+          // Drop xu thưởng - 10 coin rải có vận tốc ngẫu nhiên
+          for (let k = 0; k < 10; k++) {
+            const coin = new Item(e.x + e.w/2 - 12, e.y + e.h/2 - 12, "coin");
+            // Cho coin "bay" với vận tốc ngẫu nhiên (Item không có physics native -
+            // dùng trick: di chuyển x/y với vận tốc, falling under gravity)
+            coin.vx = (Math.random() - 0.5) * 8;
+            coin.vy = -8 - Math.random() * 5;
+            // Patch update() để có physics khi vẫn alive
+            const origUpdate = coin.update.bind(coin);
+            coin.update = function(p) {
+              if (this.alive && (this.vx || this.vy)) {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.5;       // gravity
+                this.vx *= 0.96;
+                if (this.y > 540) {   // chạm "ground" tạm (y=540 = top of ground)
+                  this.y = 540;
+                  this.vy = 0; this.vx = 0;
+                }
+              }
+              origUpdate(p);
+            };
+            level.items.push(coin);
+          }
+        } else {
+          sfxKillEnemy();
+        }
       }
     }
 

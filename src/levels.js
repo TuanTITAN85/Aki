@@ -220,7 +220,8 @@ function buildIsland(index) {
     dmg: Math.round((24  + index * 7)   * (bk.dmgMul || 1)),
     w: bossW, h: bossH,
     scoreReward: 500 + index * 200,
-    goldReward: 50 + index * 25
+    goldReward: 50 + index * 25,
+    phaseTwo: index >= 2          // boss đảo 3, 4, 5 có 2 mạng
   });
   level.enemies.push(boss);
   level.boss = boss;

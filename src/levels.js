@@ -149,6 +149,34 @@ function buildIsland(index) {
     level.platforms.push({ ...f, type: "float" });
   }
 
+  // === HAZARDS theo chủ đề đảo ===
+  // tree (đảo 1): chông gai - dẫm vào -10% HP
+  // rock (đảo 4): bãi lửa - dẫm vào -10% HP
+  // pine (đảo 3): băng - dẫm vào trượt nhanh khó kiểm soát
+  let hazardType = null;
+  if (cfg.decoration === "tree")   hazardType = "spike";
+  if (cfg.decoration === "rock")   hazardType = "lava";
+  if (cfg.decoration === "pine")   hazardType = "ice";
+  if (hazardType) {
+    // Rải 4-6 hazard dọc theo các đoạn ground (y=540 - đỉnh ground tile)
+    // Đặt giữa các đoạn ground để player buộc phải nhảy qua
+    const hazardSpots = [
+      { x: 480, w: 100 },
+      { x: 950, w: 80 },        // gần mép cuối ground 1
+      { x: 1850, w: 100 },
+      { x: 2480, w: 80 },
+      { x: 3380, w: 100 },
+      { x: 3850, w: 80 }
+    ];
+    for (const h of hazardSpots) {
+      // Đặt sát mặt đất: y=550 (ground top y=560), height=12 -> đỉnh hazard ở 550
+      // Player chạm hazard khi vy dương + landed on it
+      level.platforms.push({
+        x: h.x, y: 548, w: h.w, h: 12, type: hazardType
+      });
+    }
+  }
+
   // NPC giao nhiệm vụ ngay đầu đảo
   level.npcs.push(new QuestNPC(180, 512, index));
 

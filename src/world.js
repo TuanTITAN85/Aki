@@ -101,8 +101,49 @@ function drawPlatforms(level, camX, camY) {
         ctx.fillRect(px + i + 6, py + 30, 3, 3);
         ctx.fillRect(px + i + 14, py + 60, 3, 3);
       }
+    } else if (p.type === "spike") {
+      // Chông gai - chuỗi tam giác đỏ-xám trên mặt đất
+      const tCount = Math.floor(p.w / 16);
+      for (let i = 0; i < tCount; i++) {
+        const tx = px + i * 16;
+        ctx.fillStyle = "#7a7a8a";   // base xám
+        ctx.fillRect(tx, py + p.h - 4, 16, 4);
+        ctx.fillStyle = "#cccccc";   // tam giác kim loại
+        ctx.beginPath();
+        ctx.moveTo(tx + 2, py + p.h);
+        ctx.lineTo(tx + 8, py - 2);
+        ctx.lineTo(tx + 14, py + p.h);
+        ctx.fill();
+        // máu đỏ trên đỉnh
+        ctx.fillStyle = "#a51212";
+        ctx.fillRect(tx + 7, py - 2, 2, 4);
+      }
+    } else if (p.type === "lava") {
+      // Bãi lửa - rect cam-đỏ + animation glow
+      const glowPulse = 0.7 + 0.3 * Math.sin(Date.now() / 200);
+      ctx.fillStyle = "#3a0a06";   // nền tối
+      ctx.fillRect(px, py + 4, p.w, p.h);
+      ctx.fillStyle = `rgba(255, 100, 30, ${glowPulse})`;
+      ctx.fillRect(px, py + 2, p.w, p.h - 2);
+      // bong bóng lửa nhỏ
+      ctx.fillStyle = "#ffd24a";
+      for (let i = 0; i < p.w; i += 18) {
+        const bubH = 3 + Math.floor(Math.sin((Date.now() + i * 30) / 150) * 2);
+        ctx.fillRect(px + i + 4, py + 2, 4, Math.abs(bubH) + 2);
+      }
+    } else if (p.type === "ice") {
+      // Băng - rect xanh nhạt + highlights trắng
+      ctx.fillStyle = "#aee0ff";
+      ctx.fillRect(px, py, p.w, p.h);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(px, py, p.w, 3);   // đỉnh trắng sáng
+      // mảnh kim cương nhỏ
+      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      for (let i = 0; i < p.w; i += 22) {
+        ctx.fillRect(px + i + 6, py + 6, 4, 2);
+      }
     } else {
-      // bục lơ lửng
+      // bục lơ lửng (float)
       ctx.fillStyle = cfg.groundBot;
       ctx.fillRect(px, py + 4, p.w, p.h);
       ctx.fillStyle = cfg.groundTop;

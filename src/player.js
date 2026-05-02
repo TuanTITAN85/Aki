@@ -37,6 +37,8 @@ class Player {
     this.inventory = ["default"];    // danh sách sức mạnh đã sở hữu
     this.swordTier = 0;              // cấp kiếm: 0=chưa có, 1=Đồng, 2=Bạc, 3=Vàng
     this.name = "Hải Tặc";           // tên người chơi (nhập ở màn hình đầu)
+    this.hazardCD = 0;               // cooldown nhận damage hazard (60 frame)
+    this.onIce = false;              // trạng thái đang đứng trên băng (giảm friction)
   }
 
   // Hệ số sát thương theo cấp kiếm
@@ -79,12 +81,17 @@ class Player {
     this.x += this.vx;
     this._collide(level, "x");
     this.onGround = false;            // sẽ được bật lại nếu chạm đỉnh platform
+    this.onIce    = false;            // sẽ được bật lại nếu đáp xuống băng
     this.y += this.vy;
     this._collide(level, "y");
 
-    // Ma sát
-    if (this.onGround) this.vx *= FRICTION;
-    else this.vx *= AIR_DRAG;
+    // Ma sát - giảm mạnh nếu đứng trên băng (trượt khó kiểm soát)
+    if (this.onGround) {
+      const f = this.onIce ? 0.985 : FRICTION;   // băng: 0.985 (gần như không ma sát)
+      this.vx *= f;
+    } else {
+      this.vx *= AIR_DRAG;
+    }
     if (Math.abs(this.vx) < 0.05) this.vx = 0;
 
     // Cập nhật trạng thái animation
@@ -95,6 +102,7 @@ class Player {
 
     if (this.invul > 0) this.invul--;
     if (this.attackCooldown > 0) this.attackCooldown--;
+    if (this.hazardCD > 0) this.hazardCD--;       // cooldown nhận damage hazard
 
     // Rơi xuống biển = mất 1 mạng ngay (không nương tay)
     if (this.y > level.deathY) {
@@ -121,6 +129,46 @@ class Player {
   _collide(level, axis) {
     for (const p of level.platforms) {
       if (rectsHit(this, p)) {
+        // Hazard types xử lý riêng (không phải solid platform thông thường)
+        if (p.type === "spike" || p.type === "lava") {
+          // Player chạm hazard: -10% maxHp, knockback nhẹ, có cooldown để
+          // tránh spam damage mỗi frame
+          if (this.hazardCD <= 0) {
+            this.hp -= this.maxHp * 0.1;
+            this.hazardCD = 60;
+            this.invul = 30;       // bất tử ngắn để tránh tổ hợp với enemy
+            if (typeof sfxHurt === "function") sfxHurt();
+            // knockback ngược + nhảy nhẹ
+            this.vy = -8;
+            this.vx = (this.x < p.x + p.w/2) ? -4 : 4;
+            // chết / mất mạng nếu hp <= 0
+            if (this.hp <= 0) {
+              this.lives--;
+              if (this.lives <= 0) { this.dead = true; this.hp = 0; }
+              else { this.hp = this.maxHp; this.respawn(level); }
+            }
+          }
+          continue;             // không xử lý va chạm vật lý cho hazard
+        }
+        if (p.type === "ice") {
+          // Ice là solid platform NHƯNG khi đáp xuống top -> đánh dấu onIce
+          // (apply giảm friction trong update)
+          if (axis === "y" && this.vy > 0) {
+            this.y = p.y - this.h;
+            this.vy = 0;
+            this.onGround = true;
+            this.onIce = true;
+          } else if (axis === "y" && this.vy < 0) {
+            this.y = p.y + p.h;
+            this.vy = 0;
+          } else if (axis === "x") {
+            if (this.vx > 0) this.x = p.x - this.w;
+            else if (this.vx < 0) this.x = p.x + p.w;
+            this.vx = 0;
+          }
+          continue;
+        }
+        // Solid platform thông thường (ground / float)
         if (axis === "x") {
           if (this.vx > 0) this.x = p.x - this.w;
           else if (this.vx < 0) this.x = p.x + p.w;

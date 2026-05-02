@@ -155,25 +155,37 @@ function buildIsland(index) {
   // === HAZARDS theo chủ đề đảo ===
   // tree (đảo 1): chông gai - dẫm vào -10% HP
   // rock (đảo 4): bãi lửa - dẫm vào -10% HP
-  // pine (đảo 3): băng - dẫm vào trượt nhanh khó kiểm soát
+  // pine (đảo 3): băng - dẫm vào trượt nhanh, đặt SÁT MÉP HỐ để gây nguy hiểm
   let hazardType = null;
   if (cfg.decoration === "tree")   hazardType = "spike";
   if (cfg.decoration === "rock")   hazardType = "lava";
   if (cfg.decoration === "pine")   hazardType = "ice";
   if (hazardType) {
-    // Rải 4-6 hazard dọc theo các đoạn ground (y=540 - đỉnh ground tile)
-    // Đặt giữa các đoạn ground để player buộc phải nhảy qua
-    const hazardSpots = [
+    // Băng đặt SÁT mép cuối các đoạn ground (trước hố) để player trượt rớt biển.
+    // Spike/lava giữ nguyên spots cũ - rải dọc đảo, player buộc phải nhảy qua.
+    const iceSpots = [
+      // Trước hố 1 (1200-1280): bám sát mép ground 1
+      { x: 1100, w: 100 },
+      // Trước hố 2 (2180-2260)
+      { x: 2080, w: 100 },
+      // Trước hố 3 (3060-3140)
+      { x: 2960, w: 100 },
+      // Sau khi nhảy qua hố - đáp xuống là trượt tiếp (đẩy player tới mép kế)
+      { x: 1280, w: 80 },
+      { x: 2260, w: 80 },
+      { x: 3140, w: 80 }
+    ];
+    const otherSpots = [
       { x: 480, w: 100 },
-      { x: 950, w: 80 },        // gần mép cuối ground 1
+      { x: 950, w: 80 },
       { x: 1850, w: 100 },
       { x: 2480, w: 80 },
       { x: 3380, w: 100 },
       { x: 3850, w: 80 }
     ];
-    for (const h of hazardSpots) {
+    const spots = (hazardType === "ice") ? iceSpots : otherSpots;
+    for (const h of spots) {
       // Đặt sát mặt đất: y=550 (ground top y=560), height=12 -> đỉnh hazard ở 550
-      // Player chạm hazard khi vy dương + landed on it
       level.platforms.push({
         x: h.x, y: 548, w: h.w, h: 12, type: hazardType
       });

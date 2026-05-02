@@ -423,6 +423,17 @@ function update() {
 
     player.update(input, level);
 
+    // Trong countdown: chặn player vượt qua NPC (vạch xuất phát) để không nhặt
+    // được xu / trái khi quái còn đang đứng yên
+    if (countdownTimer > 0 && level.npcs.length > 0) {
+      const npc = level.npcs[0];
+      const limit = npc.x + npc.w;     // mép phải NPC
+      if (player.x > limit) {
+        player.x = limit;
+        if (player.vx > 0) player.vx = 0;
+      }
+    }
+
     // Nhân vật chính bắn đạn ma thuật khi click chuột (chặn nếu đang countdown)
     if (input.mouseDown && !mouseClickConsumed && player.attackCooldown <= 0
         && countdownTimer <= 0) {

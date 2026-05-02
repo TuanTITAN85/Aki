@@ -21,11 +21,13 @@ function drawBackground(level, camX) {
   const bg    = bgKey && ISLAND_BACKGROUNDS[bgKey];
   if (bg && bg.ready) {
     // Vẽ ảnh full canvas với parallax 0.3 (di chuyển 30% so với camera)
-    // Lặp 2 lần liên tiếp để khi camera di chuyển không bị "trống" ở mép
+    // Lặp 2 lần liên tiếp + Math.floor để toạ độ luôn nguyên + overlap 1px
+    // (đè vào nhau 1 pixel để chặn vạch đen subpixel ở chỗ nối)
     let offsetX = -((camX * 0.3) % W);
     if (offsetX > 0) offsetX -= W;
-    ctx.drawImage(bg.image, offsetX,     0, W, H);
-    ctx.drawImage(bg.image, offsetX + W, 0, W, H);
+    offsetX = Math.floor(offsetX);
+    ctx.drawImage(bg.image, offsetX,         0, W + 1, H);
+    ctx.drawImage(bg.image, offsetX + W,     0, W + 1, H);
     // Vẫn vẽ sóng động phía dưới để cảm giác biển sống động
     ctx.fillStyle = "rgba(255,255,255,0.4)";
     for (let i = 0; i < 30; i++) {

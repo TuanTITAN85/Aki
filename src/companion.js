@@ -460,18 +460,36 @@ class CompanionDuck {
 
     if (this.invul > 0 && Math.floor(this.invul / 4) % 2 === 0) return;
 
-    // Hiện chưa có DUCK_SHEET PNG → dùng pixel matrix tạm
-    const t = this.animTime;
-    let grid;
-    if (this.state === "attack") {
-      grid = (this.attackTimer > 9) ? DUCK_ATTACK_1 : DUCK_ATTACK_2;
-    } else if (this.state === "walk") {
-      grid = (Math.floor(t / 8) % 2 === 0) ? DUCK_WALK_1 : DUCK_WALK_2;
-    } else {
-      grid = (Math.floor(t / 22) % 2 === 0) ? DUCK_IDLE_1 : DUCK_IDLE_2;
+    // Ưu tiên sprite sheet PNG nếu đã tải xong (giống Cún)
+    let drawn = false;
+    let nameY = sy - 10;
+    if (typeof DUCK_SHEET !== "undefined" && DUCK_SHEET.ready) {
+      const dispH = this.h * 2.5;
+      const dispW = dispH * (DUCK_SHEET.frameW / DUCK_SHEET.frameH);
+      const dx = sx + this.w/2 - dispW/2;
+      // Source frame có whitespace ở dưới -> push display dy xuống ~+20px
+      const dy = sy + this.h - dispH + 20;
+      let animState = this.state;
+      if (this.state === "walk" && this.targetEnemy) animState = "run";
+      drawn = drawDuckSpriteFrame(animState, this.animTime,
+                                  dx, dy, dispW, dispH, this.facing < 0);
+      nameY = dy + 16;
     }
-    drawPixelSprite(grid, DUCK_PALETTE, sx, sy, 3, this.facing < 0);
 
-    drawText(this.name, sx + this.w/2, sy - 10, 12, "#ffd700", "#000", "center");
+    if (!drawn) {
+      // Fallback pixel matrix tạm (khi PNG chưa tải)
+      const t = this.animTime;
+      let grid;
+      if (this.state === "attack") {
+        grid = (this.attackTimer > 9) ? DUCK_ATTACK_1 : DUCK_ATTACK_2;
+      } else if (this.state === "walk") {
+        grid = (Math.floor(t / 8) % 2 === 0) ? DUCK_WALK_1 : DUCK_WALK_2;
+      } else {
+        grid = (Math.floor(t / 22) % 2 === 0) ? DUCK_IDLE_1 : DUCK_IDLE_2;
+      }
+      drawPixelSprite(grid, DUCK_PALETTE, sx, sy, 3, this.facing < 0);
+    }
+
+    drawText(this.name, sx + this.w/2, nameY, 12, "#ffd700", "#000", "center");
   }
 }

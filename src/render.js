@@ -517,6 +517,71 @@ function drawDogSpriteFrame(state, animTime, dx, dy, dw, dh, flip) {
 }
 
 // =============================================================================
+// SPRITE SHEET CỦA VỊT VÀNG ĐỒNG HÀNH - 4x4 grid
+//   Hàng 0: idle  - đứng + cánh khẽ
+//   Hàng 1: walk  - đi bộ trên đất
+//   Hàng 2: run   - bay đuổi enemy (tank style: chậm hơn cún)
+//   Hàng 3: attack - mổ / nhảy tấn công
+// =============================================================================
+const DUCK_SHEET = {
+  src: "assets/companion_duck.png",
+  cols: 4, rows: 4,
+  states: {
+    idle:   { row: 0, frames: 4, rate: 14 },
+    walk:   { row: 1, frames: 4, rate: 8  },
+    run:    { row: 2, frames: 4, rate: 5  },
+    attack: { row: 3, frames: 4, rate: 5  }
+  },
+  image: null, ready: false, frameW: 0, frameH: 0
+};
+
+function loadDuckSheet() {
+  AssetLoader.expect();
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = img.width;
+    c.height = img.height;
+    const cx = c.getContext("2d");
+    cx.drawImage(img, 0, 0);
+    chromaKey(c);
+    DUCK_SHEET.image  = c;
+    DUCK_SHEET.frameW = img.width  / DUCK_SHEET.cols;
+    DUCK_SHEET.frameH = img.height / DUCK_SHEET.rows;
+    DUCK_SHEET.ready  = true;
+    AssetLoader.done(true);
+  };
+  img.onerror = () => {
+    console.warn("Không tải được:", DUCK_SHEET.src,
+                 "- Vịt sẽ dùng pixel matrix tạm");
+    AssetLoader.done(false);
+  };
+  img.src = DUCK_SHEET.src;
+}
+loadDuckSheet();
+
+function drawDuckSpriteFrame(state, animTime, dx, dy, dw, dh, flip) {
+  if (!DUCK_SHEET.ready) return false;
+  const cfg = DUCK_SHEET.states[state];
+  if (!cfg) return false;
+  const idx = Math.floor(animTime / cfg.rate) % cfg.frames;
+  const sx = idx     * DUCK_SHEET.frameW;
+  const sy = cfg.row * DUCK_SHEET.frameH;
+  if (flip) {
+    ctx.save();
+    ctx.translate(dx + dw, dy);
+    ctx.scale(-1, 1);
+    ctx.drawImage(DUCK_SHEET.image, sx, sy, DUCK_SHEET.frameW, DUCK_SHEET.frameH,
+                  0, 0, dw, dh);
+    ctx.restore();
+  } else {
+    ctx.drawImage(DUCK_SHEET.image, sx, sy, DUCK_SHEET.frameW, DUCK_SHEET.frameH,
+                  dx, dy, dw, dh);
+  }
+  return true;
+}
+
+// =============================================================================
 // SPRITE SHEET BOSS - mỗi boss 1 file PNG, 4x4 grid (idle/walk/charge/attack)
 // Cấu trúc dictionary để dễ thêm boss mới (chỉ cần thêm 1 entry).
 // =============================================================================

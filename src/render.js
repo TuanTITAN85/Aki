@@ -513,9 +513,10 @@ const BOSS_SHEETS = {
 // Mapping decoration -> bg key: tree=grass, cactus=desert, pine=snow, rock=volcano
 // =============================================================================
 const ISLAND_BACKGROUNDS = {
-  grass:  { src: "assets/bg_grass.png",  image: null, ready: false },
-  desert: { src: "assets/bg_desert.png", image: null, ready: false }
-  // TODO: snow, volcano (khi có asset)
+  grass:   { src: "assets/bg_grass.png",   image: null, ready: false },
+  desert:  { src: "assets/bg_desert.png",  image: null, ready: false },
+  volcano: { src: "assets/bg_volcano.png", image: null, ready: false }
+  // TODO: snow (khi có asset)
 };
 
 function loadIslandBackgrounds() {

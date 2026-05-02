@@ -262,7 +262,7 @@ class Enemy {
 
   takeDamage(dmg) {
     this.hp -= dmg;
-    this.hitFlash = 8;
+    this.hitFlash = 5;        // duration ngắn lại (8 -> 5) để bớt chói
     spawnParticles(this.x + this.w/2, this.y + this.h/2, {
       count: 14, color: "#ffea60", speed: 4, size: 3, life: 28
     });
@@ -278,7 +278,7 @@ class Enemy {
     if (!this.alive) return;
     const flash = this.hitFlash > 0;
     if (flash) {
-      ctx.globalAlpha = 0.7;
+      ctx.globalAlpha = 0.35;     // bớt chói (0.7 -> 0.35) khi bị bắn trúng
       ctx.fillStyle = "#fff";
       ctx.fillRect(this.x - camX - 2, this.y - camY - 2, this.w + 4, this.h + 4);
       ctx.globalAlpha = 1;

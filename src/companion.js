@@ -243,16 +243,23 @@ class CompanionDog {
 
     // Ưu tiên sprite sheet PNG nếu đã tải xong
     let drawn = false;
+    let nameY = sy - 10;     // mặc định cho fallback
     if (typeof DOG_SHEET !== "undefined" && DOG_SHEET.ready) {
-      const dispH = this.h * 2.5;       // 30 * 2.5 = 75 - lớn hơn collision cho rõ chi tiết
+      const dispH = this.h * 2.5;
       const dispW = dispH * (DOG_SHEET.frameW / DOG_SHEET.frameH);
-      const dx = sx + this.w/2 - dispW/2;     // căn giữa X
-      const dy = sy + this.h - dispH;          // căn đáy Y với collision
+      const dx = sx + this.w/2 - dispW/2;
+      // Source frame có whitespace ở dưới -> push display dy xuống ~+20px
+      // để chân nhân vật chạm sát đáy collision (ground level)
+      const dy = sy + this.h - dispH + 20;
       // Map state -> sprite row: walk + đang đuổi enemy => "run"
       let animState = this.state;
       if (this.state === "walk" && this.targetEnemy) animState = "run";
       drawn = drawDogSpriteFrame(animState, this.animTime,
                                  dx, dy, dispW, dispH, this.facing < 0);
+      // Tên hiển thị TRÊN ĐỈNH SPRITE (không đè mặt Cún như trước)
+      // dy là top của display, character bên trong frame có whitespace ~20-25px
+      // nên thực tế đỉnh đầu ở khoảng dy + 25; đặt name cách trên thêm 14px
+      nameY = dy + 16;
     }
 
     if (!drawn) {
@@ -269,7 +276,7 @@ class CompanionDog {
       drawPixelSprite(grid, DOG_PALETTE, sx, sy, 3, this.facing < 0);
     }
 
-    // Vẽ tên phía trên đầu Cún (luôn ở vị trí cũ, đỡ rối khi sprite to/nhỏ)
-    drawText(this.name, sx + this.w/2, sy - 10, 12, "#ffd700", "#000", "center");
+    // Vẽ tên phía trên đầu Cún (vị trí được tính theo sprite render hoặc fallback)
+    drawText(this.name, sx + this.w/2, nameY, 12, "#ffd700", "#000", "center");
   }
 }

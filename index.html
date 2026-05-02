@@ -771,7 +771,7 @@ function draw() {
     const padX = 30, padY = 18;
     const boxW = Math.min(W - 60, tw + padX * 2);
     const boxH = ns + padY * 2;
-    const noticeY = 380;
+    const noticeY = 100;     // đẩy lên cao để không che tầm nhìn player
     // pill phẳng, vạch nhấn vàng dưới đáy
     ctx.fillStyle = "rgba(14, 22, 48, 0.92)";
     ctx.fillRect(W/2 - boxW/2, noticeY, boxW, boxH);

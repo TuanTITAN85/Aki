@@ -98,12 +98,19 @@ function drawPowerBar() {
 }
 
 // =============================================================================
-// HUD chính - panel góc phải (đảo, máu, mạng, điểm, vàng, sức mạnh, kiếm,
-// nhiệm vụ), thẻ tên người chơi góc trái, boss bar giữa, hint dưới đáy
+// HUD chính - panel TRÁI (HP/mạng/điểm/vàng/sức mạnh/kiếm), panel PHẢI (nhiệm
+// vụ), thẻ tên người chơi góc trên trái, boss bar giữa, hint dưới đáy phải
 // =============================================================================
 function drawHUD() {
-  // Panel phẳng, không viền, vạch nhấn vàng mỏng ở đỉnh
-  const panelX = W - 360, panelY = 20, panelW = 340, panelH = 350;
+  // Tên người chơi - thẻ nhỏ trên cùng góc trái (trên panel chính)
+  ctx.fillStyle = "rgba(14, 22, 48, 0.80)";
+  ctx.fillRect(20, 20, 220, 30);
+  ctx.fillStyle = "#5dccff";
+  ctx.fillRect(20, 20, 3, 30);
+  drawText(player.name, 32, 28, 17, "#dbe6f5", "#000");
+
+  // === PANEL CHÍNH (trái) - đảo, HP, mạng, điểm, vàng, sức mạnh, kiếm ===
+  const panelX = 20, panelY = 60, panelW = 340, panelH = 350;
   ctx.fillStyle = "rgba(14, 22, 48, 0.82)";
   ctx.fillRect(panelX, panelY, panelW, panelH);
   ctx.fillStyle = "#ffd24a";
@@ -117,13 +124,6 @@ function drawHUD() {
     ctx.font = `bold ${nameSize}px sans-serif`;
   }
   drawText(level.name, panelX + panelW/2, panelY + 12, nameSize, "#ffe18a", "#000", "center");
-
-  // Tên người chơi (góc trên trái màn hình) - phẳng, không viền
-  ctx.fillStyle = "rgba(14, 22, 48, 0.80)";
-  ctx.fillRect(20, 20, 220, 30);
-  ctx.fillStyle = "#5dccff";
-  ctx.fillRect(20, 20, 3, 30);
-  drawText(player.name, 32, 28, 17, "#dbe6f5", "#000");
 
   // Máu - thanh không viền
   const hpRatio = clamp(player.hp / player.maxHp, 0, 1);
@@ -181,34 +181,39 @@ function drawHUD() {
            (player.swordTier > 0 ? `  (×${player.swordMultiplier()})` : ""),
            panelX + 64, panelY + 182, 15, swordCols[player.swordTier], "#000");
 
-  // Tiến độ nhiệm vụ
-  let qy = panelY + 214;
-  drawText("Nhiệm vụ:", panelX + 14, qy, 14, "#aef", "#000");
-  qy += 20;
+  // === PANEL NHIỆM VỤ (phải) - tách riêng, kích thước nhỏ hơn ===
+  const qpX = W - 300, qpY = 20, qpW = 280;
+  const qpH = 40 + Math.max(1, quests.length) * 22 + 8;   // tự co theo số quest
+  ctx.fillStyle = "rgba(14, 22, 48, 0.82)";
+  ctx.fillRect(qpX, qpY, qpW, qpH);
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillRect(qpX, qpY, qpW, 3);
+  drawText("NHIỆM VỤ", qpX + qpW/2, qpY + 12, 16, "#ffe18a", "#000", "center");
+  let qy = qpY + 38;
   for (const q of quests) {
     const sym = q.done ? "✓" : "•";
     const col = q.done ? "#7afc6e" : "#fff";
     let label = q.text;
     let s = 13;
     ctx.font = `bold ${s}px sans-serif`;
-    const maxW = panelW - 80;
+    const maxW = qpW - 80;
     while (ctx.measureText(label).width > maxW && label.length > 6) {
       label = label.slice(0, -1);
     }
     if (label !== q.text) label = label.slice(0, -1) + "…";
-    drawText(`${sym} ${label}`, panelX + 14, qy, s, col, "#000");
+    drawText(`${sym} ${label}`, qpX + 14, qy, s, col, "#000");
     drawText(`${q.progress}/${q.target}`,
-             panelX + panelW - 14, qy, s, col, "#000", "right");
-    qy += 18;
+             qpX + qpW - 14, qy, s, col, "#000", "right");
+    qy += 22;
   }
 
-  // Bảng máu boss - phẳng, không viền, đặt giữa-trên dưới Power Bar
+  // Bảng máu boss - giữ giữa trên, dưới Power Bar
   if (level.boss && level.boss.alive && level.boss.aggro) {
     const bx = W/2 - 260, by = 110;
     ctx.fillStyle = "rgba(14, 22, 48, 0.85)";
     ctx.fillRect(bx, by, 520, 44);
     ctx.fillStyle = "#ff5a5a";
-    ctx.fillRect(bx, by, 520, 3);    // vạch nhấn đỏ ở đỉnh
+    ctx.fillRect(bx, by, 520, 3);
     drawText("BOSS  ·  " + level.config.bossName,
              W/2, by + 8, 16, "#ff8a8a", "#000", "center");
     const r = clamp(level.boss.hp / level.boss.maxHp, 0, 1);
@@ -216,13 +221,13 @@ function drawHUD() {
     ctx.fillStyle = "#ff3838";                 ctx.fillRect(bx + 10, by + 26, 500 * r, 12);
   }
 
-  // Hướng dẫn ở góc dưới - phẳng, vạch nhấn vàng mỏng bên trái
+  // Hint phím dưới đáy - chuyển sang PHẢI để không đè panel chính trái
   ctx.fillStyle = "rgba(14, 22, 48, 0.78)";
-  ctx.fillRect(20, H - 110, 400, 90);
+  ctx.fillRect(W - 420, H - 110, 400, 90);
   ctx.fillStyle = "#ffd24a";
-  ctx.fillRect(20, H - 110, 3, 90);
-  drawText("← → : Đi   ↑ / Cách : Nhảy",          32, H - 102, 15, "#dbe6f5");
-  drawText("Chuột trái : Phép Khống Chế Từ Xa",   32, H -  82, 15, "#cba9ff");
-  drawText("Enter : Bảng nhiệm vụ (gần NPC)",     32, H -  62, 15, "#5dd968");
-  drawText("E : Cửa Hàng  ·  1-6 / Q : Đổi sức mạnh", 32, H -  42, 15, "#ffe18a");
+  ctx.fillRect(W - 420, H - 110, 3, 90);
+  drawText("← → : Đi   ↑ / Cách : Nhảy",          W - 408, H - 102, 15, "#dbe6f5");
+  drawText("Chuột trái : Phép Khống Chế Từ Xa",   W - 408, H -  82, 15, "#cba9ff");
+  drawText("Enter : Bảng nhiệm vụ (gần NPC)",     W - 408, H -  62, 15, "#5dd968");
+  drawText("E : Cửa Hàng  ·  1-6 / Q : Đổi sức mạnh", W - 408, H -  42, 15, "#ffe18a");
 }
